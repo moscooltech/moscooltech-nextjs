@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "moscooltech",
+  "compatibility_date": "2026-11-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "vinext/server/fetch-handler",
+  "assets": {
+    "directory": "dist/client",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+    "run_worker_first": ["/*", "!/_next/static/*", "!/*/_next/static/*"]
+  },
+  // KV backs the ISR/data cache (vinext kv-data-adapter). Create with:
+  //   npx wrangler kv namespace create VINEXT_KV_CACHE
+  // and paste the id below. Local dev builds a throwaway namespace.
+  "kv_namespaces": [
+    {
+      "binding": "VINEXT_KV_CACHE",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  // D1 holds all application data. Create with:
+  //   npx wrangler d1 create moscooltech-db
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "moscooltech-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // 3 of the 5 free Cron Triggers: news fetch, news cleanup, AI queue drain.
+  "triggers": {
+    "crons": ["23 4 * * *", "41 4 * * *", "13 */6 * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

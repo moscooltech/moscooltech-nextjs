@@ -1,0 +1,42 @@
+{
+  "name": "moscooltech-next",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@10.9.9",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "wrangler dev --config dist/server/wrangler.json",
+    "deploy": "vinext-cloudflare deploy --config dist/server/wrangler.json",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply moscooltech-db --local",
+    "db:migrate": "wrangler d1 migrations apply moscooltech-db --remote",
+    "db:seed:local": "wrangler d1 execute moscooltech-db --local --file=db/seed.sql",
+    "db:seed": "wrangler d1 execute moscooltech-db --remote --file=db/seed.sql"
+  },
+  "dependencies": {
+    "@vinext/cloudflare": "latest",
+    "drizzle-orm": "^0.44.5",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-server-dom-webpack": "latest",
+    "vinext": "latest",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "@vitejs/plugin-rsc": "latest",
+    "drizzle-kit": "^0.31.5",
+    "tailwindcss": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "wrangler": "latest"
+  }
+}
