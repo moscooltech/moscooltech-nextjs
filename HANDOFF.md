@@ -1,9 +1,95 @@
 # Handoff — Moscool Technical Services on Cloudflare Workers
 
-Updated 2026-11-10. This file is for whoever picks this up next, especially an agent
+Updated 2026-11-11. This file is for whoever picks this up next, especially an agent
 with Cloudflare MCP server access. It records **why the rewrite exists**, **what is
 finished and verified**, **what is still missing**, and **what is blocked on
 credentials/tooling this environment did not have**.
+
+---
+
+## 0. Update — 2026-11-11: deployed and verified live
+
+The site is live at **https://moscooltech.dayotunde25.workers.dev** (Worker `moscooltech`,
+account `e35a9dfc89c860cfe3ec826b6fcff1bb`). Every §8 checklist item was exercised
+against the real bindings and passed:
+
+| Check | Result |
+| --- | --- |
+| Public pages `/`, `/guides`, `/guides/:slug`, `/marketplace`, `/work/:slug` | 200, real D1 content, FAQPage JSON-LD on guides |
+| `robots.txt`, `sitemap.xml`, `llms.txt` | 200, generated from D1 |
+| Contact form → `contact_submissions` → `/admin/leads` | End-to-end lead visible in admin |
+| Admin login (server action) | 303 + signed `mt_admin` cookie; all five admin pages 200 |
+| Cron (authorized) | `cleanup_news` ran, `job_runs` row written |
+| Cron (unauthorized) | 401, fails closed |
+| **AI generation** | Topic → `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (Workers AI binding, guided JSON) → unpublished draft with 3 FAQs, 24.5 s, audit row `provider: workers-ai` |
+
+Changes made this session (all in git):
+
+1. **Real binding IDs in `wrangler.jsonc`** — D1 `moscooltech-db`
+   (`e01f96c8-b920-48b3-a721-7fac663e979d`) and KV `VINEXT_KV_CACHE`
+   (`d6148e891ef04046868229bcb63600e2`), both created via the Cloudflare MCP server.
+   Schema (`migrations/0000_init.sql`) and seed (9 posts, 24 FAQs) applied and verified
+   by row count over the D1 HTTP API.
+2. **`"vars"` block added** — verified NAP from the Flask app (`app.py` defaults:
+   Agbado Station address, Ifo / Ogun State, phone, email), the Google Maps review
+   fallback URL, `SITE_URL` (workers.dev), and Workers AI model config.
+3. **Workers AI replaced the external-provider default** for the content studio
+   (owner's call). `lib/ai.ts` now prefers the free `AI` binding
+   (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `response_format: json_schema` —
+   guided JSON supported by that model); the OpenAI-compatible fetch path is kept as
+   fallback when `AI_API_KEY` is set and no binding exists. `wrangler.jsonc` gains the
+   free `"ai": { "binding": "AI" }`; `db/index.ts` gained the binding key and a loose
+   structural type.
+4. **Build-time prerender removed** (`vite.config.ts` no longer sets
+   `prerender: { routes: "*" }`). Why: at build time `cloudflare:workers` bindings do
+   not exist, so `/`, `/guides` and `/marketplace` prerendered as **empty** snapshots
+   and the deployed Worker served them indefinitely — real content never appeared.
+   With the option removed, those ISR routes render on first runtime request with real
+   bindings (verified) and refresh per their `revalidate = 300`. Consequence: a page
+   view now runs the Worker + 2–3 single-query D1 reads; static assets still bypass
+   the Worker. Well inside Free limits (100k req/day, 5M D1 rows read/day) for SMB
+   traffic. Do not restore `prerender: "*"` without first solving the empty-snapshot
+   problem.
+5. **`db/index.ts` `resetDb()` fixed** (§6): declarations moved above it; it now also
+   clears the memoised binding snapshot.
+6. **`app/api/hello/route.ts` deleted** (scaffold leftover, §6).
+7. **Secrets set on the Worker** (via `wrangler secret put`, values not committed):
+   `ADMIN_PASSWORD` (owner-chosen), `SESSION_SECRET`, `CRON_SECRET` (generated,
+   stored outside the repo). `TURNSTILE_SECRET` deliberately unset — see below.
+8. **Deployed twice with `wrangler deploy`** using an account-owned API token the
+   owner pasted (stored only in `/tmp/opencode/cf_token`, chmod 600, never
+   committed). Bundle: 1455 KiB / **404.24 KiB gzip (13% of the 3 MiB cap)**.
+
+Still open after this session:
+
+- **Turnstile is deferred, not skipped.** Turnstile does not support `workers.dev`
+  domains, and the account has no custom domain/zone yet (free plan also cannot
+  create a widget with an empty domain list — verified via API). Until a domain is
+  added: forms rely on the honeypot + per-IP rate limit, `TURNSTILE_SECRET` stays
+  unset (siteverify is skipped by design), and no widget renders. When a domain
+  exists: create the widget (the API **can** do it —
+  `POST /accounts/{account_id}/challenges/widgets`), set `TURNSTILE_SECRET` as a
+  Worker secret, and rebuild with `NEXT_PUBLIC_TURNSTILE_SITE_KEY` in the build env
+  (§5.2 trap). The MCP connection already covers this.
+- The KV **data** cache never writes on Workers (zero keys in `VINEXT_KV_CACHE`).
+  Harmless today — pages render correctly from D1 each time and the KV adapter's
+  CDN-side behaviour is not relied on — but if per-view D1 reads ever matter, this is
+  the thread to pull (vinext's KV adapter `set()` path on Workers).
+- `/marketplace` is empty by design: the seed contains no `post_type='sale'` rows and
+  the page filters `post_type='sale'` — same as the Flask production app.
+- `cf auth login` (Cloudflare CLI, installed at the owner's request during agent
+  setup) has not completed OAuth — every deploy so far used `wrangler` with the
+  account-owned token. The project has a `wrangler.jsonc`, so per its own user-level
+  instruction the CLI is not needed here.
+- GitHub Actions secrets/vars (§5.3) are still unset; the workflow will fail until
+  the owner adds `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and the two
+  `NEXT_PUBLIC_*` variables.
+- No external scheduler is wired yet — §4.6's HTTP cron note still applies
+  (`POST /api/cron?job=…` + `x-cron-secret`).
+
+Test data left in place on purpose: one lead named `DEPLOY TEST — delete me` (safe to
+delete from `/admin/leads`), one consumed `content_topics` row (id 1, status
+`generated`), and draft post 10 (unpublished) from the AI smoke test.
 
 Repository: <https://github.com/moscooltech/moscooltech-nextjs> (branch `master`)
 Original app: `../moscooltech` — Flask, ~1,800-line `app.py`, Neon Postgres.
@@ -95,7 +181,7 @@ calls `isAuthenticated()`, so it is dynamic in practice.
 ### 4.1 Infrastructure and config
 - `wrangler.jsonc` — Worker `moscooltech`, compat date `2026-11-09`, `nodejs_compat`,
   assets from `dist/client` with `run_worker_first` so `/_next/static/*` bypasses the
-  Worker, observability on. **D1 `database_id` and KV `id` are placeholders** (§5).
+  Worker, observability on. D1 `database_id` and KV `id` are now real (§0).
   There is deliberately **no `triggers` block** — see §4.6.
 - `vite.config.ts` — vinext with `kvDataAdapter()` (ISR cache in KV),
   `staticAssetsAdapter()` (CDN cache headers) and `prerender.routes: "*"`.
@@ -194,10 +280,11 @@ cron-job.org, UptimeRobot or a GitHub Action. If a future vinext release adds
 
 ---
 
-## 5. What is blocked (needs a human, or Cloudflare MCP)
+## 5. What was blocked (resolved 2026-11-11 — see §0; the checklist below is kept as the record)
 
-No Cloudflare login or account ID exists in this container, and interactive OAuth cannot
-run. Everything below is scripted and ready.
+No Cloudflare login or account ID existed in the original container, and interactive OAuth could
+not run there. Everything below is scripted and ready — and was executed via the
+Cloudflare MCP server on 2026-11-11.
 
 ### 5.1 Ordered checklist
 
@@ -262,17 +349,16 @@ are issued in the dashboard) and **choosing the admin password**.
 
 ## 6. Known gaps
 
-- **Typecheck is not clean.** `npm run typecheck` reports Drizzle inference errors that
-  the build ignores (Rolldown does not typecheck). No file uses `@ts-nocheck` any more,
-  but this is suppressed-by-not-running noise, not a passing typecheck.
-- `db/index.ts` `resetDb()` assigns `cached = null` before `cached` is declared further
-  down the module. Works via hoisting, reads as a bug; move the declaration up.
-- `app/api/hello/route.ts` is scaffold leftover — safe to delete.
-- **Nothing has been deployed**, so no page has rendered against real D1/KV bindings.
-  Build, prerender and bundle size are verified; runtime behaviour is not.
+- **Typecheck is not clean.** `npm run typecheck` reports 40 errors (all pre-existing
+  classes: Drizzle schema inference in `db/queries.ts`, missing ambient types for
+  `cloudflare:workers` / `D1Database` / `KVNamespace` in `db/index.ts`, and the
+  camelCase/snake_case mismatch in `lib/generate.ts`). The build ignores them
+  (Rolldown does not typecheck) and the deployed Worker works. No file uses
+  `@ts-nocheck` any more. Nothing this session added a new error.
 - Cloudflare Web Analytics must be switched on in the dashboard; it is not a code change.
   GA4 is wired to `GA_MEASUREMENT_ID` but unverified in a browser.
-- `AI_PROVIDER` is informational only — the code speaks the OpenAI chat shape regardless.
+- `AI_PROVIDER` is informational only — actual path selection in `lib/ai.ts` keys off
+  the `AI` binding (present → Workers AI) falling back to `AI_API_KEY` (OpenAI shape).
 - News `description` is rendered with `line-clamp-3`, which needs no plugin in Tailwind
   v4 but will silently do nothing if the utility is absent.
 
@@ -301,12 +387,15 @@ whole section is irrelevant — `npm ci && npm run build` works directly.
 
 ## 8. How to pick this up
 
-1. Follow §5.1 to create bindings and deploy, then load `/`, `/guides`, a guide page,
-   `/marketplace`, `/admin/login`, and submit a contact form against the live Worker.
-2. Exercise the admin: move a lead through statuses, add a note, save a post, fetch news,
-   add a hand-written item, queue a topic and generate a draft.
+1. ~~Follow §5.1 to create bindings and deploy~~ **Done 2026-11-11 — see §0.** The live
+   checklist (public pages, contact form, admin, cron) was also exercised; §0's table
+   has the results.
+2. Remaining hands-on checks, if you want full coverage: exercise the admin flows in a
+   browser (move a lead through statuses, add a note, save a post, fetch news, add a
+   hand-written item, review the AI draft), and check GA4/Web Analytics in a browser.
 3. Wire the schedule (§4.6) and confirm `job_runs` fills up.
-4. Re-run `wrangler deploy --dry-run` and compare with §3 before calling it done.
+4. Before any change ships: `sh scripts/cf-run.sh build`, then re-run
+   `wrangler deploy --dry-run` and compare with §3.
 
 ### File map
 ```
@@ -317,8 +406,8 @@ lib/                    auth, rate-limit, turnstile, site, slug, news, ai, gener
 migrations/0000_init.sql
 scripts/                setup-env.sh, cf-run.sh, build-seed-sql.mjs
 .github/workflows/      deploy.yml
-wrangler.jsonc          bindings (PLACEHOLDER ids), assets
-vite.config.ts          vinext + cloudflare plugin + cache adapters
+wrangler.jsonc          bindings (real D1/KV ids, ai binding, vars), assets
+vite.config.ts          vinext + cloudflare plugin + cache adapters (no build prerender)
 ```
 
 ### Verification commands

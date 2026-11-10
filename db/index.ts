@@ -11,6 +11,8 @@ export interface Bindings {
   DB: D1Database;
   VINEXT_KV_CACHE?: KVNamespace;
   ASSETS?: Fetcher;
+  /** Workers AI binding — typed loosely so we don't depend on global types. */
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
   ADMIN_PASSWORD?: string;
   SESSION_SECRET?: string;
   TURNSTILE_SECRET?: string;
@@ -34,6 +36,7 @@ export interface Bindings {
 const BINDING_KEYS = [
   "DB",
   "VINEXT_KV_CACHE",
+  "AI",
   "ADMIN_PASSWORD",
   "SESSION_SECRET",
   "TURNSTILE_SECRET",
@@ -55,6 +58,19 @@ const BINDING_KEYS = [
 ] as const;
 
 let cachedBindings: Bindings | null = null;
+
+type Db = ReturnType<typeof createClient>;
+
+let cached: Db | null = null;
+
+/**
+ * Reset memoised state — used by tests that swap bindings. Clears both the
+ * binding snapshot and the Drizzle client.
+ */
+export function resetDb(): void {
+  cachedBindings = null;
+  cached = null;
+}
 
 /**
  * Access Worker bindings from any server component, route handler or action.
@@ -91,15 +107,6 @@ export function hasBindings(): boolean {
 function createClient() {
   return drizzle(bindings().DB, { schema });
 }
-
-/** Reset the memoised client — used by tests that swap bindings. */
-export function resetDb(): void {
-  cached = null;
-}
-
-type Db = ReturnType<typeof createClient>;
-
-let cached: Db | null = null;
 
 /** Drizzle client over the D1 binding, reused within the isolate. */
 export function db(): Db {

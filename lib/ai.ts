@@ -31,15 +31,15 @@ export type DraftInput = {
 };
 
 export function aiConfigured(): boolean {
-  return Boolean(bindings().AI_API_KEY);
+  return Boolean(bindings().AI) || Boolean(bindings().AI_API_KEY);
 }
 
 export function providerName(): string {
-  return bindings().AI_PROVIDER || "openai";
+  return bindings().AI_PROVIDER || (bindings().AI ? "workers-ai" : "openai");
 }
 
 export function modelName(): string {
-  return bindings().AI_MODEL || "gpt-4o-mini";
+  return bindings().AI_MODEL || (bindings().AI ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : "gpt-4o-mini");
 }
 
 function baseUrl(): string {
@@ -83,7 +83,58 @@ function stripFences(text: string): string {
     .trim();
 }
 
-export async function generateDraft(input: DraftInput): Promise<Draft> {
+/** JSON Schema mirroring DraftSchema, used for Workers AI guided (JSON-mode) output. */
+const DraftJsonSchema = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    meta_description: { type: "string" },
+    content: { type: "string" },
+    faqs: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { question: { type: "string" }, answer: { type: "string" } },
+        required: ["question", "answer"],
+      },
+    },
+  },
+  required: ["title", "meta_description", "content", "faqs"],
+};
+
+type ChatMessage = { role: string; content: string };
+
+function messagesFor(input: DraftInput): ChatMessage[] {
+  return [
+    { role: "system", content: SYSTEM },
+    { role: "user", content: buildPrompt(input) },
+  ];
+}
+
+/**
+ * Workers AI binding — no API key, runs inside the platform, guided JSON output
+ * (supported by llama-3.3 models). Billed in Neurons; the Free plan includes a
+ * daily allocation that comfortably covers the two-topic-per-run cron drain.
+ */
+async function runOnWorkersAi(messages: ChatMessage[]): Promise<string> {
+  const ai = bindings().AI;
+  if (!ai) throw new Error("The Workers AI binding is not available on this Worker.");
+
+  const result = await ai.run(modelName(), {
+    messages,
+    response_format: { type: "json_schema", json_schema: DraftJsonSchema },
+    temperature: 0.7,
+    max_tokens: 8000,
+  });
+
+  const response = (result as { response?: unknown }).response;
+  if (typeof response === "string" && response.trim()) return response;
+  if (response && typeof response === "object") return JSON.stringify(response);
+  throw new Error("Workers AI returned an empty response.");
+}
+
+/** Any OpenAI-compatible chat endpoint (AI_API_KEY + AI_BASE_URL). */
+async function runOnOpenAiCompatible(messages: ChatMessage[]): Promise<string> {
   const key = bindings().AI_API_KEY;
   if (!key) throw new Error("AI_API_KEY is not configured.");
 
@@ -97,10 +148,7 @@ export async function generateDraft(input: DraftInput): Promise<Draft> {
       model: modelName(),
       temperature: 0.7,
       response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: buildPrompt(input) },
-      ],
+      messages,
     }),
     signal: AbortSignal.timeout(25_000),
   });
@@ -120,8 +168,20 @@ export async function generateDraft(input: DraftInput): Promise<Draft> {
   const payload = JSON.parse(text) as {
     choices?: { message?: { content?: string } }[];
   };
-  const raw = payload.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("The model returned an empty response.");
+  const content = payload.choices?.[0]?.message?.content;
+  if (!content) throw new Error("The model returned an empty response.");
+  return content;
+}
+
+export async function generateDraft(input: DraftInput): Promise<Draft> {
+  if (!aiConfigured()) {
+    throw new Error("AI is not configured: no Workers AI binding and no AI_API_KEY.");
+  }
+
+  const messages = messagesFor(input);
+  const raw = bindings().AI
+    ? await runOnWorkersAi(messages)
+    : await runOnOpenAiCompatible(messages);
 
   let json: unknown;
   try {

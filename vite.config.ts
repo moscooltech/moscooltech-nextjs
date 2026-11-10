@@ -8,7 +8,10 @@ export default defineConfig({
   plugins: [
     vinext({
       cache: { data: kvDataAdapter(), cdn: staticAssetsAdapter() },
-      prerender: { routes: "*" },
+      // No build-time prerender: bindings do not exist during the build, so
+      // prerendering DB-backed pages snapshots empty HTML that the deployed
+      // Worker then serves indefinitely. ISR (revalidate = 300) renders on the
+      // first runtime request with real bindings and caches into KV instead.
     }),
     cloudflare({
       viteEnvironment: {
