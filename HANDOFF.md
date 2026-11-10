@@ -81,9 +81,11 @@ Still open after this session:
   setup) has not completed OAuth — every deploy so far used `wrangler` with the
   account-owned token. The project has a `wrangler.jsonc`, so per its own user-level
   instruction the CLI is not needed here.
-- GitHub Actions secrets/vars (§5.3) are still unset; the workflow will fail until
-  the owner adds `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and the two
-  `NEXT_PUBLIC_*` variables.
+- GitHub Actions secrets are set (owner, 2026-11-11): `CLOUDFLARE_API_TOKEN`,
+  `CLOUDFLARE_ACCOUNT_ID`. Run #2 passed all steps (ci install → migrations → build →
+  deploy) in 40 s and the live site re-verified afterwards. The two `NEXT_PUBLIC_*`
+  vars are deliberately unset — empty falls back gracefully (no Turnstile widget, no
+  GA snippet) — so add them only when a domain (Turnstile) and a GA4 ID exist.
 - No external scheduler is wired yet — §4.6's HTTP cron note still applies
   (`POST /api/cron?job=…` + `x-cron-secret`).
 
