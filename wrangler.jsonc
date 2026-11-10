@@ -30,10 +30,10 @@
       "migrations_dir": "migrations"
     }
   ],
-  // 3 of the 5 free Cron Triggers: news fetch, news cleanup, AI queue drain.
-  "triggers": {
-    "crons": ["23 4 * * *", "41 4 * * *", "13 */6 * * *"]
-  },
+  // No "triggers" block: vinext does not expose a scheduled() handler, so a
+  // Cloudflare Cron Trigger would invoke a function that does not exist.
+  // Drive the jobs over HTTP instead (POST /api/cron?job=… with x-cron-secret),
+  // from cron-job.org, UptimeRobot or a GitHub Action. See README → Automation.
   "observability": {
     "enabled": true
   }

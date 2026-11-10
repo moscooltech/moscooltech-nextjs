@@ -1,87 +1,175 @@
-import { db } from "@/db/index";
-import { newsArticles } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import Link from "next/link";
+import { desc } from "drizzle-orm";
+import { db, schema } from "@/db";
+import {
+  cleanupNewsAction,
+  createNewsAction,
+  deleteNewsAction,
+  fetchNewsAction,
+} from "@/app/admin/actions";
 
-export async function GET(request: Request) {
-  const allNews = await db.select().from(newsArticles).orderBy(desc(newsArticles.pubDate));
+export const dynamic = "force-dynamic";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>News Management - MoscoolTech Admin</title>
-  <link rel="stylesheet" href="/css/admin-dashboard.css" />
-</head>
-<body>
-  <div class="admin-container">
-    <header class="admin-header">
-      <h1>News Management</h1>
-      <div class="user-panel">
-        <span>Admin</span>
-        <a href="/admin/login?action=logout" class="btn-secondary">Logout</a>
+const field =
+  "rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-accent";
+
+const ERRORS: Record<string, string> = {
+  missing: "A news item needs both a title and a link.",
+  link: "That link is not a valid URL.",
+  date: "That publish date could not be understood.",
+};
+
+export default async function NewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; fetched?: string; removed?: string }>;
+}) {
+  const { error, fetched, removed } = await searchParams;
+
+  const items = await db()
+    .select()
+    .from(schema.newsArticles)
+    .orderBy(desc(schema.newsArticles.pubDate))
+    .limit(60);
+
+  const fetchedCount = fetched ? Number(fetched) : null;
+  const removedCount = removed ? Number(removed) : null;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">Newsroom</p>
+          <h1 className="mt-2 font-display text-3xl font-semibold">
+            News ({items.length})
+          </h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Fetched items are pruned after 30 days; hand-added items stay until deleted.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <form action={fetchNewsAction}>
+            <button type="submit" className="btn-primary px-4 py-2 text-sm">
+              Fetch from NewsData.io
+            </button>
+          </form>
+          <form action={cleanupNewsAction}>
+            <button type="submit" className="btn-ghost px-4 py-2 text-sm">
+              Remove items older than 30 days
+            </button>
+          </form>
+        </div>
+      </header>
+
+      {error ? (
+        <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-ink">
+          {ERRORS[error] ?? "That news item could not be saved."}
+        </p>
+      ) : null}
+
+      {fetchedCount !== null ? (
+        <p className="rounded-lg bg-trust-soft px-3 py-2 text-sm text-trust">
+          {fetchedCount > 0
+            ? `Imported ${fetchedCount} article(s).`
+            : "Nothing imported — check NEWSDATA_API_KEY or try again later."}
+        </p>
+      ) : null}
+
+      {removedCount !== null ? (
+        <p className="rounded-lg bg-trust-soft px-3 py-2 text-sm text-trust">
+          Removed {removedCount} old article(s).
+        </p>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+        <section className="flex flex-col gap-3">
+          {items.length === 0 ? (
+            <p className="card p-6 text-sm text-ink-muted">
+              No news yet. Fetch from the API above, or add an item by hand.
+            </p>
+          ) : (
+            items.map((item) => (
+              <article key={item.id} className="card p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="font-display text-base font-semibold">
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-accent"
+                      >
+                        {item.title}
+                      </a>
+                    </h2>
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {item.sourceId || "Unknown source"} ·{" "}
+                      {new Date(item.pubDate).toLocaleDateString("en-NG")} ·{" "}
+                      {item.apiSource === "manual" ? "manual" : "fetched"}
+                    </p>
+                  </div>
+                  <form action={deleteNewsAction}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <button
+                      type="submit"
+                      className="shrink-0 text-xs text-ink-muted hover:text-accent"
+                    >
+                      Delete
+                    </button>
+                  </form>
+                </div>
+                {item.description ? (
+                  <p className="mt-2 line-clamp-3 text-sm text-ink-soft">{item.description}</p>
+                ) : null}
+              </article>
+            ))
+          )}
+        </section>
+
+        <section className="card p-6">
+          <h2 className="font-display text-lg font-semibold">Add an item</h2>
+          <form action={createNewsAction} className="mt-4 flex flex-col gap-3 text-sm">
+            <label className="flex flex-col gap-1.5">
+              <span className="font-medium">Title</span>
+              <input name="title" required maxLength={300} className={field} />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="font-medium">Link</span>
+              <input name="link" type="url" required placeholder="https://" className={field} />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="font-medium">Summary</span>
+              <textarea name="description" rows={3} maxLength={1000} className={field} />
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Source</span>
+                <input name="source_id" placeholder="Punch, Reuters…" className={field} />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Publish date</span>
+                <input name="pub_date" type="date" className={field} />
+              </label>
+            </div>
+
+            <button type="submit" className="btn-primary self-start">
+              Add news
+            </button>
+          </form>
+
+          <p className="mt-4 text-xs text-ink-muted">
+            The public home page shows the latest few items, so this list feeds{" "}
+            <Link href="/" className="text-accent">
+              the site
+            </Link>
+            .
+          </p>
+        </section>
       </div>
-    </header>
-
-    <section class="news-list">
-      <h2>News Articles (${allNews.length})</h2>
-      ${allNews.length === 0 ? `<p>No news articles found.</p>` : `
-        <div class="news-grid">
-          ${allNews.map((article) => `
-            <article class="news-card" key="${article.id}">
-              <h3>${article.title}</h3>
-              <p>${article.description || "No description"}</p>
-              <div class="news-meta">
-                <span>${article.sourceId || "—"}</span>
-                <span>${new Date(article.pubDate).toLocaleDateString()}</span>
-              </div>
-              <a href="/admin/news/${article.id}/edit" class="btn btn-sm">Edit</a>
-              <form method="POST" action="/admin/news/${article.id}" onsubmit="return confirm('Delete this news article?')">
-                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-              </form>
-            </article>
-          `).join("")}
-        </div>
-      `}
-    </section>
-
-    <section class="add-news">
-      <h3>Add News Article</h3>
-      <form method="POST" action="/admin/news" class="news-form">
-        <input type="hidden" name="apiSource" value="manual" />
-        
-        <div class="form-group">
-          <label>Title</label>
-          <input type="text" name="title" required />
-        </div>
-
-        <div class="form-group">
-          <label>Description</label>
-          <textarea name="description" rows="3" required></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Link</label>
-          <input type="url" name="link" required />
-        </div>
-
-        <div class="form-group">
-          <label>Source ID</label>
-          <input type="text" name="sourceId" />
-        </div>
-
-        <div class="form-group">
-          <label>Article ID</label>
-          <input type="text" name="articleId" />
-        </div>
-
-        <button type="submit" class="btn btn-primary">Add News</button>
-        <button type="button" onclick="window.history.back()" class="btn btn-secondary">Cancel</button>
-      </form>
-    </section>
-  </div>
-</body>
-</html>`;
-
-  return new Response(html);
+    </div>
+  );
 }

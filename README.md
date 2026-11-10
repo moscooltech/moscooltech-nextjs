@@ -88,6 +88,30 @@ npx wrangler secret put CRON_SECRET
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | GA4 |
 | `CRON_SECRET` | authenticates scheduled invocations |
 
+## Automation
+
+**Jobs.** There are three background jobs — `fetch_news`, `cleanup_news` and
+`generate_ai` — all served by `POST /api/cron?job=<name>` and guarded by the
+`CRON_SECRET` header (`x-cron-secret`).
+
+`vinext` does not expose a `scheduled()` handler, so a Cloudflare Cron Trigger would
+call a function that does not exist and `wrangler.jsonc` therefore has no `triggers`
+block. Schedule the endpoint from cron-job.org, UptimeRobot or a GitHub Action instead:
+
+```sh
+curl -sS -X POST "https://moscooltech.workers.dev/api/cron?job=fetch_news" \
+  -H "x-cron-secret: $CRON_SECRET"
+```
+
+Each job records itself in `job_runs` and is skipped once per UTC day; delete that row
+to force a retry. The admin pages also run the news jobs directly, without the secret.
+
+**Deploy.** `.github/workflows/deploy.yml` applies D1 migrations, builds and deploys on
+every push to `master`. It needs two repository secrets — `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` — plus two repository variables —
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `NEXT_PUBLIC_GA_MEASUREMENT_ID`. Those two are
+inlined at build time, so a Worker secret is too late for them.
+
 ## Scripts
 
 | Command | What it does |

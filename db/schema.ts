@@ -169,6 +169,7 @@ export const schema = {
   contentTopics,
   aiGenerations,
   jobRuns,
+  rateLimits,
 };
 
 export type Post = typeof posts.$inferSelect;

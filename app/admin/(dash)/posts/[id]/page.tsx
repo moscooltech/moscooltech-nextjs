@@ -1,121 +1,62 @@
-import { db } from "@/db/index";
-import { posts } from "@/db/schema";
+import Link from "next/link";
+import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
+import { PostForm } from "@/components/admin/post-form";
+import { deletePostAction } from "@/app/admin/actions";
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const postId = parseInt(params.id);
-  const post = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
+export const dynamic = "force-dynamic";
 
-  if (!post[0]) {
-    return new Response("Post not found", { status: 404 });
-  }
+export default async function EditPostPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { id } = await params;
+  const { error } = await searchParams;
+  const postId = Number(id);
+  if (!Number.isInteger(postId)) notFound();
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Edit Post - ${post[0].title} - MoscoolTech Admin</title>
-  <link rel="stylesheet" href="/css/admin-dashboard.css" />
-</head>
-<body>
-  <div class="admin-container">
-    <header class="admin-header">
-      <h1>Edit Post</h1>
-      <div class="user-panel">
-        <span>Admin</span>
-        <a href="/admin/login?action=logout" class="btn-secondary">Logout</a>
+  const rows = await db()
+    .select()
+    .from(schema.posts)
+    .where(eq(schema.posts.id, postId))
+    .limit(1);
+  const post = rows[0];
+  if (!post) notFound();
+
+  return (
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link href="/admin/posts" className="text-sm text-ink-muted hover:text-accent">
+            ← Posts
+          </Link>
+          <h1 className="mt-2 font-display text-2xl font-semibold">{post.title}</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {post.published ? "Published" : "Draft"} · updated{" "}
+            {new Date(post.updatedAt).toLocaleString("en-NG")}
+          </p>
+        </div>
+        <form action={deletePostAction}>
+          <input type="hidden" name="id" value={post.id} />
+          <button type="submit" className="text-sm text-ink-muted hover:text-accent">
+            Delete post
+          </button>
+        </form>
+      </header>
+
+      {error === "empty" ? (
+        <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-ink">
+          A post needs both a title and body content.
+        </p>
+      ) : null}
+
+      <div className="card p-6">
+        <PostForm post={post} />
       </div>
-    </header>
-
-    <section class="post-editor">
-      <form method="POST" action="/admin/posts/${post[0].id}" class="post-form">
-        <input type="hidden" name="id" value="${post[0].id}" />
-        
-        <div class="form-group">
-          <label>Title</label>
-          <input type="text" name="title" value="${post[0].title}" required />
-        </div>
-
-        <div class="form-group">
-          <label>Slug</label>
-          <input type="text" name="slug" value="${post[0].slug}" required />
-        </div>
-
-        <div class="form-group">
-          <label>Category</label>
-          <input type="text" name="category" value="${post[0].category}" required />
-        </div>
-
-        <div class="form-group">
-          <label>Post Type</label>
-          <select name="postType">
-            <option value="portfolio" ${post[0].postType === "portfolio" ? "selected" : ""}>Portfolio</option>
-            <option value="guide" ${post[0].postType === "guide" ? "selected" : ""}>Guide</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Published</label>
-          <select name="published">
-            <option value="true" ${post[0].published ? "selected" : ""}>Yes</option>
-            <option value="false" ${!post[0].published ? "selected" : ""}>No</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Price</label>
-          <input type="number" name="price" value="${post[0].price || 0}" />
-        </div>
-
-        <div class="form-group">
-          <label>Currency</label>
-          <input type="text" name="currency" value="${post[0].currency || "NGN"}" />
-        </div>
-
-        <div class="form-group">
-          <label>Negotiable</label>
-          <select name="negotiable">
-            <option value="true" ${post[0].negotiable ? "selected" : ""}>Yes</option>
-            <option value="false" ${!post[0].negotiable ? "selected" : ""}>No</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Item Link</label>
-          <input type="url" name="itemLink" value="${post[0].itemLink || ""}" />
-        </div>
-
-        <div class="form-group">
-          <label>Video URL</label>
-          <input type="url" name="videoUrl" value="${post[0].videoUrl || ""}" />
-        </div>
-
-        <h4>Content</h4>
-        <textarea name="content" rows="10" required>${post[0].content}</textarea>
-
-        <div class="form-group">
-          <label>Meta Description</label>
-          <input type="text" name="metaDescription" value="${post[0].metaDescription || ""}" />
-        </div>
-
-        <div class="form-group">
-          <label>Image URL</label>
-          <input type="url" name="imageUrl" value="${post[0].imageUrl || ""}" />
-        </div>
-
-        <div class="form-group">
-          <label>Image Alt</label>
-          <input type="text" name="imageAlt" value="${post[0].imageAlt || ""}" />
-        </div>
-
-        <button type="submit" class="btn btn-primary">Save Post</button>
-        <button type="button" onclick="window.history.back()" class="btn btn-secondary">Cancel</button>
-      </form>
-    </section>
-  </div>
-</body>
-</html>`;
-
-  return new Response(html);
+    </div>
+  );
 }

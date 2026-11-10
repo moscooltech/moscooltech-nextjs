@@ -3,58 +3,40 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, not, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { createSession, destroySession, isAuthenticated, passwordMatches } from "@/lib/auth";
 import { consume } from "@/lib/rate-limit";
+import { uniqueSlug } from "@/lib/slug";
+import { cleanupNews, fetchNews } from "@/lib/news";
+import { generateTopicById } from "@/lib/generate";
 
 const LOGIN_WINDOW = 900;
 const LOGIN_LIMIT = 5;
-
-function slugify(title: string): string {
-  return (
-    title
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "")
-      .slice(0, 240) || "article"
-  );
-}
-
-async function uniqueSlug(title: string, ignoreId?: number): Promise<string> {
-  const base = slugify(title);
-  let candidate = base;
-  for (let i = 2; i < 50; i++) {
-    const existing = await db()
-      .select({ id: schema.posts.id })
-      .from(schema.posts)
-      .where(eq(schema.posts.slug, candidate))
-      .limit(1);
-    if (!existing.length || existing[0].id === ignoreId) return candidate;
-    candidate = `${base.slice(0, 230)}-${i}`;
-  }
-  return `${base.slice(0, 230)}-${Date.now()}`;
-}
 
 async function requireAdmin(): Promise<void> {
   if (!(await isAuthenticated())) redirect("/admin/login");
 }
 
+function revalidatePublicContent(): void {
+  revalidatePath("/");
+  revalidatePath("/guides");
+  revalidatePath("/marketplace");
+}
+
+/* ------------------------------------------------------------------ auth */
+
 export async function loginAction(formData: FormData): Promise<void> {
   const password = String(formData.get("password") || "");
+  const headerBag = await headers();
   const ip =
-    (await headers()).get("cf-connecting-ip") ||
-    (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    headerBag.get("cf-connecting-ip") ||
+    headerBag.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
 
   const limit = await consume(`login:${ip}`, LOGIN_LIMIT, LOGIN_WINDOW);
-  if (!limit.allowed) {
-    redirect("/admin/login?error=rate");
-  }
-
-  if (!password || !passwordMatches(password)) {
-    redirect("/admin/login?error=invalid");
-  }
+  if (!limit.allowed) redirect("/admin/login?error=rate");
+  if (!password || !passwordMatches(password)) redirect("/admin/login?error=invalid");
 
   await createSession();
   redirect("/admin");
@@ -67,13 +49,15 @@ export async function logoutAction(): Promise<void> {
 
 /* ----------------------------------------------------------------- leads */
 
+const LEAD_STATUSES = ["new", "contacted", "quoted", "won", "lost"];
+
 export async function updateLeadAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const contactId = Number(formData.get("contact_id"));
   const status = String(formData.get("status") || "new");
   const rawValue = String(formData.get("estimated_value") || "").trim();
-  const allowed = ["new", "contacted", "quoted", "won", "lost"];
-  if (!Number.isInteger(contactId) || !allowed.includes(status)) {
+
+  if (!Number.isInteger(contactId) || !LEAD_STATUSES.includes(status)) {
     redirect("/admin/leads");
   }
 
@@ -90,6 +74,7 @@ export async function updateLeadAction(formData: FormData): Promise<void> {
       set: { status, estimatedValue: value, updatedAt: new Date().toISOString() },
     });
 
+  revalidatePath("/admin");
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${contactId}`);
   redirect(`/admin/leads/${contactId}`);
@@ -114,46 +99,41 @@ export async function savePostAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = Number(formData.get("id") || 0);
   const title = String(formData.get("title") || "").trim().slice(0, 200);
-  const content = String(formData.get("content") || "").trim().slice(0, 20000);
-  if (!title || !content) redirect(id ? `/admin/posts/${id}` : "/admin/posts/new?error=empty");
+  const content = String(formData.get("content") || "").trim().slice(0, 40000);
 
-  const postType = String(formData.get("post_type") || "portfolio");
+  if (!title || !content) {
+    redirect(id ? `/admin/posts/${id}?error=empty` : "/admin/posts/new?error=empty");
+  }
+
+  const priceRaw = String(formData.get("price") || "").trim();
   const payload = {
     title,
     content,
-    metaDescription: String(formData.get("meta_description") || "").trim().slice(0, 160),
+    metaDescription: String(formData.get("meta_description") || "").trim().slice(0, 160) || null,
     imageUrl: String(formData.get("image_url") || "").trim().slice(0, 500) || null,
     imageAlt: String(formData.get("image_alt") || "").trim().slice(0, 200) || title,
+    videoUrl: String(formData.get("video_url") || "").trim().slice(0, 500) || null,
     category: String(formData.get("category") || "general").trim().slice(0, 100),
-    postType,
+    postType: String(formData.get("post_type") || "portfolio"),
+    negotiable: formData.get("negotiable") === "on",
+    itemLink: String(formData.get("item_link") || "").trim().slice(0, 500) || null,
+    price: priceRaw ? Number(priceRaw) : null,
     published: formData.get("published") === "on",
     updatedAt: new Date().toISOString(),
   };
-  const priceRaw = String(formData.get("price") || "").trim();
 
   if (id) {
-    await db()
-      .update(schema.posts)
-      .set({ ...payload, price: priceRaw ? Number(priceRaw) : null })
-      .where(eq(schema.posts.id, id));
+    await db().update(schema.posts).set(payload).where(eq(schema.posts.id, id));
   } else {
     await db()
       .insert(schema.posts)
-      .values({
-        ...payload,
-        slug: await uniqueSlug(title),
-        price: priceRaw ? Number(priceRaw) : null,
-        currency: "NGN",
-        negotiable: formData.get("negotiable") === "on",
-        itemLink: String(formData.get("item_link") || "").trim().slice(0, 500) || null,
-      });
+      .values({ ...payload, slug: await uniqueSlug(title) });
   }
 
-  // Content is cached for 5 minutes; drop the cache so edits show immediately.
-  revalidatePath("/");
-  revalidatePath("/guides");
-  revalidatePath("/marketplace");
-  revalidatePath(`/guides/${slugify(title)}`);
+  // Public pages are ISR-cached for 5 minutes; drop them so the edit is visible now.
+  revalidatePublicContent();
+  revalidatePath("/admin/posts");
+  if (id) revalidatePath(`/admin/posts/${id}`);
   redirect("/admin/posts");
 }
 
@@ -162,17 +142,57 @@ export async function deletePostAction(formData: FormData): Promise<void> {
   const id = Number(formData.get("id"));
   if (!Number.isInteger(id)) redirect("/admin/posts");
 
-  // FAQs cascade in SQLite, but D1 does not always enforce it on legacy tables.
+  // SQLite cascades, but D1 does not reliably enforce FKs on existing tables.
   await db().delete(schema.postFaqs).where(eq(schema.postFaqs.postId, id));
   await db().delete(schema.posts).where(eq(schema.posts.id, id));
 
-  revalidatePath("/");
-  revalidatePath("/guides");
-  revalidatePath("/marketplace");
+  revalidatePublicContent();
+  revalidatePath("/admin/posts");
   redirect("/admin/posts");
 }
 
 /* ------------------------------------------------------------------ news */
+
+export async function createNewsAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const title = String(formData.get("title") || "").trim().slice(0, 300);
+  const link = String(formData.get("link") || "").trim().slice(0, 500);
+  const description = String(formData.get("description") || "").trim().slice(0, 1000);
+  const sourceId = String(formData.get("source_id") || "").trim().slice(0, 100);
+
+  if (!title || !link) redirect("/admin/news?error=missing");
+
+  let link_is_valid = true;
+  try {
+    new URL(link);
+  } catch {
+    link_is_valid = false;
+  }
+  if (!link_is_valid) redirect("/admin/news?error=link");
+
+  const pubRaw = String(formData.get("pub_date") || "").trim();
+  const pubDate = pubRaw ? new Date(pubRaw) : new Date();
+  if (Number.isNaN(pubDate.getTime())) redirect("/admin/news?error=date");
+
+  await db()
+    .insert(schema.newsArticles)
+    .values({
+      title,
+      description: description || null,
+      link,
+      pubDate: pubDate.toISOString(),
+      sourceId: sourceId || "Manual",
+      apiSource: "manual",
+      // The unique index is on article_id, so the link doubles as the identity
+      // of a hand-added item and re-submitting the same link is a no-op.
+      articleId: link,
+    })
+    .onConflictDoNothing();
+
+  revalidatePath("/admin/news");
+  revalidatePath("/");
+  redirect("/admin/news");
+}
 
 export async function deleteNewsAction(formData: FormData): Promise<void> {
   await requireAdmin();
@@ -185,123 +205,95 @@ export async function deleteNewsAction(formData: FormData): Promise<void> {
   redirect("/admin/news");
 }
 
-const NEWS_KEYWORDS = [
-  "air conditioning",
-  "air conditioner",
-  "refrigerator",
-  "refrigeration",
-  "hvac",
-  "solar panel",
-  "solar installation",
-  "inverter",
-  "electrical wiring",
-];
-
-type NewsApiItem = {
-  article_id?: string;
-  title?: string;
-  link?: string;
-  description?: string;
-  pubDate?: string;
-  source_id?: string;
-  image_url?: string;
-};
-
-/** Shared by the admin button and the cron trigger. */
-export async function fetchNews(): Promise<number> {
-  const key = (await import("@/db")).bindings().NEWSDATA_API_KEY;
-  if (!key) return 0;
-
-  const query = NEWS_KEYWORDS.map((word) => `"${word}"`).join(" OR ");
-  const params = new URLSearchParams({
-    apikey: key,
-    q: query,
-    language: "en",
-    size: "10",
-    removeduplicate: "1",
-    country: "ng",
-  });
-
-  let items: NewsApiItem[] = [];
-  try {
-    const response = await fetch(`https://newsdata.io/api/1/latest?${params}`, {
-      headers: { accept: "application/json" },
-    });
-    if (response.ok) {
-      const data = (await response.json()) as { results?: NewsApiItem[] };
-      items = data.results || [];
-    }
-  } catch {
-    return 0;
-  }
-
-  const relevant = items.filter((item) => {
-    if (!item.title || !item.link) return false;
-    const haystack = `${item.title} ${item.description || ""}`.toLowerCase();
-    return NEWS_KEYWORDS.some((word) => haystack.includes(word));
-  });
-
-  // One batch = one D1 query, keeping well inside the 50-query budget.
-  const statements = relevant.map((item) =>
-    db()
-      .insert(schema.newsArticles)
-      .values({
-        title: item.title!.slice(0, 300),
-        description: (item.description || "").slice(0, 1000),
-        link: item.link!.slice(0, 500),
-        pubDate: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
-        sourceId: item.source_id || "NewsData.io",
-        imageUrl: item.image_url || null,
-        apiSource: "newsdata",
-        articleId: item.article_id || item.link!,
-      })
-      .onConflictDoNothing(),
-  );
-
-  if (!statements.length) return 0;
-
-  const d1 = (await import("@/db")).bindings().DB;
-  await d1.batch(statements as unknown as D1PreparedStatement[]);
-  return statements.length;
-}
-
 export async function fetchNewsAction(): Promise<void> {
   await requireAdmin();
-  await fetchNews();
+  const count = await fetchNews();
   revalidatePath("/admin/news");
   revalidatePath("/");
-  redirect("/admin/news");
-}
-
-/** Deletes fetched news older than 30 days. */
-export async function cleanupNews(): Promise<number> {
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const stale = await db()
-    .select({ id: schema.newsArticles.id })
-    .from(schema.newsArticles)
-    .where(and(eq(schema.newsArticles.apiSource, "newsdata"), lt(schema.newsArticles.createdAt, cutoff)))
-    .limit(200);
-
-  if (!stale.length) return 0;
-  await db()
-    .delete(schema.newsArticles)
-    .where(inArray(schema.newsArticles.id, stale.map((row) => row.id)));
-  return stale.length;
+  redirect(`/admin/news?fetched=${count}`);
 }
 
 export async function cleanupNewsAction(): Promise<void> {
   await requireAdmin();
-  await cleanupNews();
+  const removed = await cleanupNews();
   revalidatePath("/admin/news");
   revalidatePath("/");
-  redirect("/admin/news");
+  redirect(`/admin/news?removed=${removed}`);
 }
 
-export async function latestNewsCount(): Promise<number> {
-  const rows = await db().select({ id: schema.newsArticles.id }).from(schema.newsArticles).limit(1);
-  return rows.length;
+/* -------------------------------------------------------------- ai studio */
+
+export async function createTopicAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const topic = String(formData.get("topic") || "").trim().slice(0, 200);
+  const keyword = String(formData.get("keyword") || "").trim().slice(0, 120);
+  const category = String(formData.get("category") || "guides");
+  const tone = String(formData.get("tone") || "practical").slice(0, 40);
+  const targetWords = Number(formData.get("target_words") || 1200);
+  const faqCount = Number(formData.get("faq_count") || 4);
+
+  if (!topic) redirect("/admin/ai?error=topic");
+
+  await db()
+    .insert(schema.contentTopics)
+    .values({
+      topic,
+      keyword: keyword || null,
+      category: category === "portfolio" ? "portfolio" : "guides",
+      tone,
+      targetWords: Number.isFinite(targetWords) ? Math.min(Math.max(targetWords, 300), 3000) : 1200,
+      faqCount: Number.isFinite(faqCount) ? Math.min(Math.max(faqCount, 0), 8) : 4,
+      status: "queued",
+    });
+
+  revalidatePath("/admin/ai");
+  redirect("/admin/ai");
 }
 
-export async function recentGenerations() {
-  return db().select().from(schema.aiGenerations).orderBy(desc(schema.aiGenerations.createdAt)).limit(10);
+export async function generateTopicAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (!Number.isInteger(id)) redirect("/admin/ai");
+
+  const result = await generateTopicById(id);
+  revalidatePath("/admin/ai");
+  revalidatePath("/admin/posts");
+
+  if (!result.ok) {
+    redirect(`/admin/ai?error=${encodeURIComponent(result.error.slice(0, 160))}`);
+  }
+  redirect("/admin/ai?generated=1");
+}
+
+export async function deleteTopicAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (Number.isInteger(id)) {
+    await db().delete(schema.contentTopics).where(eq(schema.contentTopics.id, id));
+  }
+  revalidatePath("/admin/ai");
+  redirect("/admin/ai");
+}
+
+/** Clears a stale "error" status so the topic can be retried. */
+export async function requeueTopicAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (Number.isInteger(id)) {
+    await db()
+      .update(schema.contentTopics)
+      .set({ status: "queued", error: null })
+      .where(eq(schema.contentTopics.id, id));
+  }
+  revalidatePath("/admin/ai");
+  redirect("/admin/ai");
+}
+
+/* Kept for the dashboard's "did anything arrive" check. */
+export async function staleTopicCount(): Promise<number> {
+  const rows = await db()
+    .select({ total: sql<number>`count(*)` })
+    .from(schema.contentTopics)
+    .where(and(not(eq(schema.contentTopics.status, "generated")), gte(schema.contentTopics.id, 0)));
+  return Number(rows[0]?.total ?? 0);
 }
