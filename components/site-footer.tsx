@@ -28,7 +28,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-2 text-sm">
           <span className="eyebrow">Services</span>
           {SERVICES.map((service) => (
-            <Link key={service.slug} href="/#services" className="text-ink-soft hover:text-accent">
+            <Link key={service.slug} href="/#services" className="w-fit text-ink-soft transition-colors duration-150 ease-out hover:text-accent">
               {service.name}
             </Link>
           ))}
@@ -37,11 +37,11 @@ export function SiteFooter() {
         <div className="flex flex-col gap-2 text-sm">
           <span className="eyebrow">Pages</span>
           {NAV.map((item) => (
-            <Link key={item.href} href={item.href} className="text-ink-soft hover:text-accent">
+            <Link key={item.href} href={item.href} className="w-fit text-ink-soft transition-colors duration-150 ease-out hover:text-accent">
               {item.label}
             </Link>
           ))}
-          <Link href="/llms.txt" className="text-ink-soft hover:text-accent">
+          <Link href="/llms.txt" className="w-fit text-ink-soft transition-colors duration-150 ease-out hover:text-accent">
             llms.txt
           </Link>
         </div>
@@ -56,9 +56,14 @@ export function SiteFooter() {
             href={biz.reviewUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-1 font-medium text-accent hover:text-accent-ink"
+            className="group/review mt-1 flex w-fit items-center gap-1.5 font-medium text-accent"
           >
-            Leave a Google review →
+            <span className="transition-colors duration-150 ease-out group-hover/review:text-accent-ink">
+              Leave a Google review
+            </span>
+            <span aria-hidden="true" className="transition-transform duration-200 ease-out group-hover/review:translate-x-1">
+              →
+            </span>
           </a>
         </div>
       </div>

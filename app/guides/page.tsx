@@ -17,8 +17,8 @@ export default async function GuidesPage() {
 
   return (
     <div className="container-page py-14">
-      <header className="max-w-2xl">
-        <p className="eyebrow">Guides</p>
+      <header className="reveal max-w-2xl">
+        <p className="eyebrow eyebrow-rule">Guides</p>
         <h1 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">
           What the job should cost, and how it should be done.
         </h1>
@@ -30,8 +30,8 @@ export default async function GuidesPage() {
 
       {guides.length ? (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {guides.map((post) => (
-            <PostCard key={post.id} post={post} eyebrow="Guide" />
+          {guides.map((post, index) => (
+            <PostCard key={post.id} post={post} eyebrow="Guide" className="reveal" style={{ "--reveal-delay": `${index * 70}ms` } as React.CSSProperties} />
           ))}
         </div>
       ) : (

@@ -93,6 +93,35 @@ Test data left in place on purpose: one lead named `DEPLOY TEST — delete me` (
 delete from `/admin/leads`), one consumed `content_topics` row (id 1, status
 `generated`), and draft post 10 (unpublished) from the AI smoke test.
 
+### 0.1 UI redesign — 2026-11-11 (web-animation-design skill)
+
+Owner asked for a better "feel"; rebuilt the visual layer per the
+`web-animation-design` skill (Emil Kowalski easing/timing rules), direction chosen
+by owner: **polished premium** (warm palette kept, motion added).
+
+- **Fonts were referenced but never loaded** — the site rendered in system fonts.
+  Now self-hosts variable `Inter` (48 KB) and `Space Grotesk` (22 KB) latin subsets
+  in `public/fonts/`, preloaded in the root layout.
+- Motion layer in `globals.css`: easing tokens (ease-out entrances, ease hovers,
+  linear only for marquee/ambient), scroll-reveal system, hero entrance stagger,
+  marquee trust bar, button shine/press, card lift + accent rule, WhatsApp FAB
+  with pulse, mobile menu (200 ms paired panel/scrim, origin at trigger),
+  header scroll-condense (paint-only properties).
+- New client components: `scroll-reveal.tsx` (IntersectionObserver, re-runs per
+  pathname), `floating-actions.tsx` (hidden on `/admin`), `header-client.tsx`
+  (mobile menu + scroll state); `site-header.tsx` stays a server wrapper passing
+  NAP as props.
+- **`lib/nav.ts` added** — static constants (NAV/SERVICES/SERVICE_AREAS) moved out
+  of `lib/site.ts` because a client component importing `site.ts` pulls the
+  server-only `bindings()` into the client graph and breaks the build
+  (`cloudflare:workers` unresolved). `site.ts` re-exports them for server code.
+- Progressive enhancement: reveal-hidden states only apply under `html.js`
+  (inline script); no-JS users and crawlers always see full content.
+  `prefers-reduced-motion` gets explicit per-component overrides (content never
+  hidden), hover transforms gated behind `@media (hover:hover)`.
+- Bundle: 393 KiB gzip (was 404) — all animation is CSS + ~1 KB of JS.
+
+
 Repository: <https://github.com/moscooltech/moscooltech-nextjs> (branch `master`)
 Original app: `../moscooltech` — Flask, ~1,800-line `app.py`, Neon Postgres.
 

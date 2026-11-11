@@ -18,8 +18,8 @@ export default async function MarketplacePage() {
 
   return (
     <div className="container-page py-14">
-      <header className="max-w-2xl">
-        <p className="eyebrow">Marketplace</p>
+      <header className="reveal max-w-2xl">
+        <p className="eyebrow eyebrow-rule">Marketplace</p>
         <h1 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">
           Checked units, honest prices.
         </h1>
@@ -31,9 +31,9 @@ export default async function MarketplacePage() {
 
       {items.length ? (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <div key={item.id} id={`item-${item.id}`} className="scroll-mt-24">
-              <PostCard post={item} eyebrow={item.category} showPrice />
+              <PostCard post={item} eyebrow={item.category} showPrice className="reveal" style={{ "--reveal-delay": `${index * 70}ms` } as React.CSSProperties} />
               {item.itemLink ? (
                 <a
                   href={item.itemLink}
@@ -48,15 +48,24 @@ export default async function MarketplacePage() {
           ))}
         </div>
       ) : (
-        <div className="mt-10 rounded-2xl border border-line bg-white p-8">
+        <div className="reveal card mt-10 flex flex-col items-start gap-3 p-8" style={{ "--reveal-delay": "120ms" } as React.CSSProperties}>
+          <span aria-hidden="true" className="grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent-ink">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+              <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9ZM12 12l8.5-4.5M12 12v9M3.5 7.5 12 12" />
+            </svg>
+          </span>
           <h2 className="font-display text-xl font-semibold">Nothing listed right now</h2>
-          <p className="mt-2 text-ink-soft">
+          <p className="text-ink-soft">
             Stock changes weekly. Call{" "}
             <a href={biz.phoneHref} className="font-medium text-accent">
               {biz.phone}
             </a>{" "}
-            and tell us what you are looking for.
+            — or send us a message — and tell us what you are looking for. We source, test and
+            install.
           </p>
+          <a href={biz.whatsapp} target="_blank" rel="noreferrer" className="btn-primary mt-1 self-start">
+            Ask on WhatsApp
+          </a>
         </div>
       )}
     </div>

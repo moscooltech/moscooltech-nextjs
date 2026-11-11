@@ -83,8 +83,8 @@ export default async function GuidePage({ params }: Params) {
         <span className="text-ink-soft">{post.category}</span>
       </nav>
 
-      <header className="mt-6 max-w-3xl">
-        <p className="eyebrow">{post.category}</p>
+      <header className="reveal mt-6 max-w-3xl">
+        <p className="eyebrow eyebrow-rule">{post.category}</p>
         <h1 className="mt-3 font-display text-3xl font-semibold leading-tight sm:text-4xl">
           {post.title}
         </h1>

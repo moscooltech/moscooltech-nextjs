@@ -78,7 +78,7 @@ export function ContactForm({ siteKey = "" }: { siteKey?: string }) {
           rows={4}
           maxLength={2000}
           placeholder="Unit type, the fault, and when you'd like a visit."
-          className="rounded-lg border border-line bg-paper px-3 py-2.5 text-ink outline-none focus:border-accent"
+          className="rounded-lg border border-line bg-paper px-3 py-2.5 text-ink outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
         />
       </label>
 
@@ -129,7 +129,7 @@ function Field({
         required={required}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className="rounded-lg border border-line bg-paper px-3 py-2.5 text-ink outline-none focus:border-accent"
+        className="rounded-lg border border-line bg-paper px-3 py-2.5 text-ink outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-accent focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
       />
     </label>
   );

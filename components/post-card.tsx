@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import type { Post } from "@/db/schema";
 
 export function postHref(post: Post): string {
@@ -13,11 +14,18 @@ type Props = {
   post: Post;
   eyebrow?: string;
   showPrice?: boolean;
+  /** Extra classes on the article (used for the scroll-reveal system). */
+  className?: string;
+  /** Inline styles, e.g. a stagger delay custom property. */
+  style?: CSSProperties;
 };
 
-export function PostCard({ post, eyebrow, showPrice }: Props) {
+export function PostCard({ post, eyebrow, showPrice, className, style }: Props) {
   return (
-    <article className="card group flex flex-col overflow-hidden transition-shadow hover:shadow-[0_10px_40px_-24px_rgba(13,21,32,0.45)]">
+    <article
+      className={`card card-hover group flex flex-col overflow-hidden ${className ?? ""}`}
+      style={style}
+    >
       <Link href={postHref(post)} className="flex h-full flex-col">
         {post.imageUrl ? (
           <span className="relative block aspect-[16/10] overflow-hidden bg-paper">
@@ -28,7 +36,7 @@ export function PostCard({ post, eyebrow, showPrice }: Props) {
               alt={post.imageAlt || post.title}
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
             />
           </span>
         ) : null}
@@ -45,7 +53,12 @@ export function PostCard({ post, eyebrow, showPrice }: Props) {
               {post.negotiable ? <span className="ml-1 text-xs font-normal text-ink-muted">negotiable</span> : null}
             </span>
           ) : (
-            <span className="mt-auto pt-2 text-sm font-medium text-accent">Read more →</span>
+            <span className="mt-auto flex items-center gap-1.5 pt-2 text-sm font-medium text-accent">
+              Read more
+              <span aria-hidden="true" className="transition-transform duration-200 ease-out group-hover:translate-x-1">
+                →
+              </span>
+            </span>
           )}
         </span>
       </Link>

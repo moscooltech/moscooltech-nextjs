@@ -45,8 +45,8 @@ export default async function CaseStudyPage({ params }: Params) {
         <span>Work</span>
       </nav>
 
-      <header className="mt-6 max-w-3xl">
-        <p className="eyebrow">Case study · {post.category}</p>
+      <header className="reveal mt-6 max-w-3xl">
+        <p className="eyebrow eyebrow-rule">Case study · {post.category}</p>
         <h1 className="mt-3 font-display text-3xl font-semibold leading-tight sm:text-4xl">
           {post.title}
         </h1>
