@@ -121,6 +121,37 @@ by owner: **polished premium** (warm palette kept, motion added).
   hidden), hover transforms gated behind `@media (hover:hover)`.
 - Bundle: 393 KiB gzip (was 404) — all animation is CSS + ~1 KB of JS.
 
+### 0.2 Privacy, consent and security hardening — 2026-11-11
+
+- **`/privacy`** — full policy written for this site's actual data flows (contact +
+  feedback forms → D1, `mt_admin` strictly-necessary cookie, localStorage consent
+  choice, Cloudflare hosting/Turnstile, NDPA 2023 + GDPR rights, retention periods).
+  In the sitemap, footer and contact-form note.
+- **Cookie consent banner** (`components/cookie-consent.tsx`): appears 800 ms after
+  load (250 ms ease-out entrance), stores the choice in localStorage key
+  `mt-cookie-consent` (`accepted`/`declined`), hidden on `/admin`. The site sets no
+  tracking cookies today; **if optional analytics are ever added, they must check
+  that key and stay off unless it is `accepted`**.
+- **`middleware.ts`** (vinext supports the Next middleware convention):
+  - Security headers on every Worker-served response: CSP
+    (`default-src 'self'`, inline script/style allowed — no nonce pipeline in this
+    RSC setup; `connect-src`/`frame-src` include `challenges.cloudflare.com` for
+    Turnstile), HSTS, `X-Content-Type-Options`, `Referrer-Policy`,
+    `Permissions-Policy` (camera/mic/geo/payment/usb/interest-cohort off),
+    `X-Frame-Options: DENY` + `frame-ancestors 'none'`.
+  - CSRF: POSTs to `/api/contact` and `/api/feedback` must carry an `Origin` or
+    `Referer` whose host equals the request host, else 403. `/api/cron` is exempt
+    (authenticates by `x-cron-secret`; external schedulers send no Origin).
+- **`public/_headers`** — asset-baseline for files that bypass the Worker:
+  `Referrer-Policy`, and immutable font caching (`max-age=31536000, immutable`).
+  Don't add `nosniff` here — the asset layer already sends it (duplicates show as
+  `nosniff, nosniff`).
+- Already-present defenses verified intact: per-IP rate limits on both forms,
+  honeypot field, HttpOnly/Secure/SameSite=Lax admin cookie, cron fails closed.
+- Middleware deprecation note: vinext/Next 16 prefer the `proxy.ts` name; the
+  warning is benign and `middleware.ts` works on the current vinext version.
+
+
 
 Repository: <https://github.com/moscooltech/moscooltech-nextjs> (branch `master`)
 Original app: `../moscooltech` — Flask, ~1,800-line `app.py`, Neon Postgres.

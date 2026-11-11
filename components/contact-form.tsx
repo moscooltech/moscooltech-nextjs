@@ -95,7 +95,12 @@ export function ContactForm({ siteKey = "" }: { siteKey?: string }) {
           {state === "sending" ? "Sending…" : "Send message"}
         </button>
         <p className="text-xs text-ink-muted">
-          We reply within 2 hours during working hours.
+          We reply within 2 hours during working hours. Submitting shares your details with us for
+          this enquiry only — see our{" "}
+          <a href="/privacy" className="text-accent underline decoration-accent/40 underline-offset-4 transition-colors duration-150 ease-out hover:text-accent-ink">
+            privacy policy
+          </a>
+          .
         </p>
       </div>
     </form>

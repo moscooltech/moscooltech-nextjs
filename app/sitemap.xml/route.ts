@@ -22,6 +22,7 @@ export async function GET() {
     ["/", "1.0"],
     ["/guides", "0.8"],
     ["/marketplace", "0.8"],
+    ["/privacy", "0.3"],
   ];
 
   const urls = [

@@ -445,6 +445,23 @@
     }
   }
 
+  /* -------------------------------------------------- consent banner */
+  .banner-in {
+    animation: banner-in 250ms var(--ease-out-cubic) both;
+    will-change: transform;
+  }
+
+  @keyframes banner-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   /* -------------------------------------------------- article & misc */
   .article-body {
     font-size: 1.0625rem;
@@ -555,7 +572,8 @@
 
   .ambient-blob,
   .fab-pulse::before,
-  .fab-pulse::after {
+  .fab-pulse::after,
+  .banner-in {
     animation: none;
   }
 

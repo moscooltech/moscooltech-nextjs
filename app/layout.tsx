@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FloatingActions } from "@/components/floating-actions";
+import { CookieConsent } from "@/components/cookie-consent";
 import { business, siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </main>
         <SiteFooter />
         <FloatingActions whatsapp={biz.whatsapp} />
+        <CookieConsent />
         <ScrollReveal />
         <script
           type="application/ld+json"

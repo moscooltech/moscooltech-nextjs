@@ -44,6 +44,9 @@ export function SiteFooter() {
           <Link href="/llms.txt" className="w-fit text-ink-soft transition-colors duration-150 ease-out hover:text-accent">
             llms.txt
           </Link>
+          <Link href="/privacy" className="w-fit text-ink-soft transition-colors duration-150 ease-out hover:text-accent">
+            Privacy policy
+          </Link>
         </div>
 
         <div className="flex flex-col gap-2 text-sm">
