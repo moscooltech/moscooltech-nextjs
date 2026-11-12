@@ -60,11 +60,14 @@ export function HeaderClient({ phone, phoneHref }: Props) {
           className="flex items-center gap-2.5"
           aria-label="Moscool Technical Services home"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-ink text-sm font-bold text-paper transition-transform duration-200 ease-out">
-            <span aria-hidden="true" className="transition-transform duration-200 ease-out">
-              M
-            </span>
-          </span>
+          <img
+            src="/logo/moscool-mark-96.png"
+            alt=""
+            width={96}
+            height={96}
+            aria-hidden="true"
+            className="h-9 w-9 shrink-0 transition-transform duration-200 ease-out"
+          />
           <span className="flex flex-col leading-tight">
             <span className="font-display text-sm font-semibold tracking-tight">Moscool</span>
             <span className="text-[11px] text-ink-muted">Technical Services</span>

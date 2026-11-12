@@ -55,6 +55,11 @@ const SECTIONS = [
           is never set for ordinary visitors.
         </li>
         <li>
+          <strong>Page-visit counts.</strong> Cloudflare Web Analytics records aggregate,
+          cookieless statistics about page visits (which pages are read, broad region). It sets
+          no cookies, and does not identify, profile or track anyone across sites.
+        </li>
+        <li>
           <strong>Your consent choice.</strong> Whether you accepted or declined cookies is stored
           in your browser&rsquo;s localStorage so we don&rsquo;t ask you again. It is not sent to
           our servers.
@@ -119,9 +124,11 @@ const SECTIONS = [
     body: (
       <>
         <p>
-          This site sets <strong>no advertising or tracking cookies</strong>. The only cookie is the
-          strictly-necessary admin login cookie described in section 2, which ordinary visitors
-          never receive. Your cookie banner choice is kept in your browser&rsquo;s localStorage.
+          This site sets <strong>no advertising or tracking cookies</strong>. Traffic statistics
+          come from Cloudflare Web Analytics, which is cookieless and aggregate — it counts visits
+          without identifying anyone. The only cookie is the strictly-necessary admin login cookie
+          described in section 2, which ordinary visitors never receive. Your cookie banner choice
+          is kept in your browser&rsquo;s localStorage.
         </p>
         <p>
           If we ever add optional analytics, it will be off until you press &ldquo;Accept&rdquo; in
@@ -179,7 +186,7 @@ const SECTIONS = [
 ];
 
 export default function PrivacyPage() {
-  const updated = "11 November 2026";
+  const updated = "12 November 2026";
 
   return (
     <div className="container-page py-14">
@@ -188,7 +195,7 @@ export default function PrivacyPage() {
         <h1 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Privacy policy</h1>
         <p className="mt-4 text-lg leading-8 text-ink-soft">
           Plain language: what we collect through this website, why, how long we keep it, and how to
-          get it deleted. Last updated <time dateTime="2026-11-11">{updated}</time>.
+          get it deleted. Last updated <time dateTime="2026-11-12">{updated}</time>.
         </p>
         <nav aria-label="On this page" className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-sm">
           {SECTIONS.map((section) => (

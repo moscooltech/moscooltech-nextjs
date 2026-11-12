@@ -15,11 +15,11 @@ const CSP = [
   // Inline scripts: the pre-paint enhancement gate and JSON-LD blocks.
   // Inline styles: React's style attributes. A nonce pipeline is not
   // available in this RSC setup; everything else is locked to 'self'.
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self'",
-  "connect-src 'self' https://challenges.cloudflare.com",
+  "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self'",
   "object-src 'none'",
@@ -56,6 +56,16 @@ function hostOf(value: string | null): string | null {
 }
 
 export function middleware(request: NextRequest) {
+  // Force HTTPS. Cloudflare fronts this Worker and tells us the visitor's
+  // scheme via x-forwarded-proto; a plain 308 preserves method and body.
+  // (Local dev has no such header, so this never runs there.)
+  if (request.headers.get("x-forwarded-proto") === "http") {
+    const httpsUrl = request.nextUrl.clone();
+    httpsUrl.protocol = "https:";
+    httpsUrl.port = "";
+    return NextResponse.redirect(httpsUrl, 308);
+  }
+
   // Same-origin enforcement for the lead/feedback forms.
   if (
     request.method === "POST" &&

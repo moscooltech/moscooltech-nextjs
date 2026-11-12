@@ -51,6 +51,36 @@ const MARQUEE_ITEMS = [
   "Same-day commercial response",
 ];
 
+/* Visible FAQ — the questions customers actually ask on the phone. Rendered
+   on the page (real content, not hidden filler) and mirrored in FAQPage
+   JSON-LD below for AI answer engines. */
+const FAQS = [
+  {
+    q: "How much does AC repair cost in Lagos?",
+    a: "It depends on the fault — a gas top-up is a very different job from a compressor replacement. We diagnose the unit first, then give you a written quote before any work starts, so the price you see is the price you pay. Our AC repair guide lists typical 2026 price ranges for the common faults.",
+  },
+  {
+    q: "Do you offer emergency or same-day service?",
+    a: "Yes. We run a 24/7 emergency line, and commercial refrigeration callouts with stock at risk jump the queue — often attended within 2–4 hours. Standard bookings are scheduled for the same or next working day.",
+  },
+  {
+    q: "Which areas do you cover?",
+    a: "Lagos Mainland — Ikeja, Yaba, Surulere, Maryland, Gbagada and Ogba — plus Ogun State, including Magboro, Mowe and Ibafo. Our workshop is at Agbado Station, right on the Lagos–Ogun corridor.",
+  },
+  {
+    q: "What warranty comes with your work?",
+    a: "Every job carries a 90-day warranty covering both parts and labour. Refurbished equipment sold through our marketplace carries the same warranty, which is rare for second-hand units.",
+  },
+  {
+    q: "Do you handle commercial refrigeration?",
+    a: "Yes — freezers, chillers, display cases and cold rooms for shops, restaurants and pharmacies. We also run quarterly maintenance plans with written per-unit reports and priority response for businesses and landlords.",
+  },
+  {
+    q: "Do you install solar and inverter systems?",
+    a: "We design hybrid and off-grid solar from a real load audit, not a guess at panel count — and we install inverters with honest sizing for Nigerian outages. Battery replacement and changeover wiring are part of the same service.",
+  },
+];
+
 const stagger = (index: number): CSSProperties => ({ "--reveal-delay": `${index * 70}ms` } as CSSProperties);
 const heroDelay = (ms: number): CSSProperties => ({ "--hero-delay": `${ms}ms` } as CSSProperties);
 
@@ -304,6 +334,28 @@ export default async function HomePage() {
         </section>
       ) : null}
 
+      {/* --------------------------------------------------------------- FAQ */}
+      <section className="container-page py-12">
+        <div className="reveal max-w-2xl">
+          <p className="eyebrow eyebrow-rule">Common questions</p>
+          <h2 className="mt-3 font-display text-3xl font-semibold">
+            Answers before you even call.
+          </h2>
+        </div>
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          {FAQS.map((item, index) => (
+            <article
+              key={item.q}
+              className="reveal card card-hover p-6"
+              style={{ "--reveal-delay": `${index * 60}ms` } as CSSProperties}
+            >
+              <h3 className="font-display text-base font-semibold text-ink">{item.q}</h3>
+              <p className="mt-2 text-sm leading-6 text-ink-muted">{item.a}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       {/* ------------------------------------------------------------ contact */}
       <section id="contact" className="container-page py-16">
         <div className="reveal grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
@@ -340,6 +392,24 @@ export default async function HomePage() {
           <ContactForm siteKey={turnstileSiteKey()} />
         </div>
       </section>
+
+      {/* FAQPage structured data — mirrors the visible FAQ above. Google
+          retired FAQ rich results (May 2026); this markup now serves AI
+          answer engines and other semantic consumers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: FAQS.map((item) => ({
+              "@type": "Question",
+              name: item.q,
+              acceptedAnswer: { "@type": "Answer", text: item.a },
+            })),
+          }),
+        }}
+      />
     </>
   );
 }

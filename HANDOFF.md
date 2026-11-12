@@ -151,6 +151,54 @@ by owner: **polished premium** (warm palette kept, motion added).
 - Middleware deprecation note: vinext/Next 16 prefer the `proxy.ts` name; the
   warning is benign and `middleware.ts` works on the current vinext version.
 
+### 0.3 SEO audit fixes + brand logo — 2026-11-12
+
+External SEO audit (17 screenshots in `~/work/seo check/`, dated 2026-11-11) graded
+the site **C+** (On-Page B · GEO A+ · Links F · Usability B- · Performance B+),
+21 recommendations. All code-fixable items were fixed and verified live:
+
+- **Title tag 75→57 chars**: default is now
+  `Moscool Technical Services | AC, Solar & Electrical Lagos` (50–60 range).
+- **Meta description 162→147 chars** (120–160 range), keeps the 24/7 hook.
+- **Homepage canonical** — layout metadata now sets `alternates.canonical: "/"`;
+  per-page canonicals (guides/marketplace/privacy/work) override it.
+- **HTTPS redirect** — middleware 308s any `x-forwarded-proto: http` request
+  (verified: pages + font assets). This was a real finding: workers.dev served
+  200 over plain HTTP before.
+- **Favicon** — generated from the brand's icon-only "M" mark
+  (`favicon-32.png`, `favicon-192.png`, `apple-touch-icon.png` 180 flattened on
+  white, all referenced via metadata `icons`).
+- **og:image** — new `/og.png` (1200×630, full horizontal logo on white);
+  wired through `openGraph.images` + `twitter.card summary_large_image`.
+- **JSON-LD** upgraded to `@graph`: HVACBusiness now carries `logo`
+  (`/logo/moscool-mark-512.png`) and real `image`; added a `WebSite` entity.
+- **Thin content (688 words)** — homepage FAQ section with 6 real Q&As
+  (pricing, emergency, areas, warranty, commercial, solar) + matching FAQPage
+  JSON-LD (note: Google retired FAQ rich results May 2026; markup serves AI
+  answer engines). Visible word count now ~975.
+- **Analytics** — Cloudflare Web Analytics (free, cookieless) created via API;
+  beacon token `14a0727f1229428d9a2f11532570ae2a` in layout; CSP updated
+  (`script-src` + `static.cloudflareinsights.com`, `connect-src` +
+  `cloudflareinsights.com`). View data in the CF dashboard → Web Analytics.
+  Privacy policy + consent banner wording updated to reflect it (cookieless =
+  no consent gate needed); policy "last updated" bumped to 2026-11-12.
+- **Logo assets** (`public/`, from `~/work/logo/`): `logo/moscool-mark-96.png`
+  (header mark, replaces the placeholder "M" box), `logo/moscool-mark-512.png`
+  (JSON-LD logo). The icon source PNG had a clipped text sliver at x≥755 which
+  was cropped before trimming to a transparent square. Old circular
+  "Air Conditioner Services" badge JPG deliberately not used (outdated brand).
+
+Audit items deliberately **not** code fixes:
+- Backlinks (F): ongoing marketing task (GBP, directories, partnerships).
+- Social profile links (FB/X/IG/LinkedIn/YouTube): profiles don't exist yet —
+  create them, then add `sameAs` to JSON-LD + footer.
+- SPF/DMARC: email is @gmail.com; those records belong to the sending domain.
+- Plain-text email in footer: kept intentionally (contact transparency is an
+  E-E-A-T trust signal; rate limits + honeypot already protect the forms).
+- Inline styles / render-blocking CSS: framework-level, no perf harm (stagger
+  delays are style attributes by design).
+
+
 
 
 Repository: <https://github.com/moscooltech/moscooltech-nextjs> (branch `master`)

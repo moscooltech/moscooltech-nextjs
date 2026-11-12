@@ -52,9 +52,9 @@ export function CookieConsent() {
     >
       <div className="banner-in card translate-y-0 rounded-2xl border-ink/10 bg-paper-raised p-4 shadow-[0_24px_48px_-16px_rgba(13,21,32,0.35)] sm:p-5">
         <p className="text-sm leading-6 text-ink-soft">
-          <span className="font-semibold text-ink">Cookies:</span> this site uses no ads or
-          tracking. The only cookie is the one that keeps the owner&rsquo;s dashboard logged in.
-          Your choice is remembered on this device.{" "}
+          <span className="font-semibold text-ink">Cookies:</span> this site sets no ads or
+          tracking cookies, and analytics is cookieless. The only cookie keeps the owner&rsquo;s
+          dashboard logged in. Your choice is remembered on this device.{" "}
           <Link
             href="/privacy#cookies"
             className="font-medium text-accent underline decoration-accent/40 underline-offset-4 transition-colors duration-150 ease-out hover:text-accent-ink"
