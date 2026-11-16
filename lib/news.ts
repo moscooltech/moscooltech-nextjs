@@ -27,13 +27,19 @@ type NewsApiItem = {
 /**
  * Pulls the latest relevant items into D1.
  *
- * Returns the number of rows sent to D1, or 0 when the API key is unset, the
- * request fails, or nothing relevant came back. All inserts go through a single
- * `D1 batch()`, which counts as one query against the 50-per-invocation budget.
+ * Returns how many rows were inserted plus a `detail` string that always says
+ * WHY on a zero-import run (missing key, HTTP error, network failure, or no
+ * relevant results) — the job log then shows the real cause instead of a
+ * mystery zero. All inserts go through a single `D1 batch()`, which counts as
+ * one query against the 50-per-invocation budget.
  */
-export async function fetchNews(): Promise<number> {
+export type FetchNewsResult = { imported: number; detail: string };
+
+export async function fetchNews(): Promise<FetchNewsResult> {
   const key = bindings().NEWSDATA_API_KEY;
-  if (!key) return 0;
+  if (!key) {
+    return { imported: 0, detail: "NEWSDATA_API_KEY is not configured on this Worker" };
+  }
 
   const query = NEWS_KEYWORDS.map((word) => `"${word}"`).join(" OR ");
   const params = new URLSearchParams({
@@ -50,12 +56,24 @@ export async function fetchNews(): Promise<number> {
     const response = await fetch(`https://newsdata.io/api/1/latest?${params}`, {
       headers: { accept: "application/json" },
     });
-    if (response.ok) {
-      const data = (await response.json()) as { results?: NewsApiItem[] };
-      items = data.results ?? [];
+    if (!response.ok) {
+      const text = await response.text();
+      return {
+        imported: 0,
+        detail: `NewsData responded ${response.status}: ${text.slice(0, 160)}`,
+      };
     }
-  } catch {
-    return 0;
+    const data = (await response.json()) as { results?: NewsApiItem[] };
+    items = data.results ?? [];
+  } catch (error) {
+    return {
+      imported: 0,
+      detail: `NewsData request failed: ${error instanceof Error ? error.message : "network error"}`,
+    };
+  }
+
+  if (!items.length) {
+    return { imported: 0, detail: "NewsData returned no results for the keyword query" };
   }
 
   const relevant = items.filter((item) => {
@@ -64,7 +82,12 @@ export async function fetchNews(): Promise<number> {
     return NEWS_KEYWORDS.some((word) => haystack.includes(word));
   });
 
-  if (!relevant.length) return 0;
+  if (!relevant.length) {
+    return {
+      imported: 0,
+      detail: `none of ${items.length} result(s) matched the service keywords`,
+    };
+  }
 
   const statements = relevant.map((item) =>
     db()
@@ -83,7 +106,10 @@ export async function fetchNews(): Promise<number> {
   );
 
   await bindings().DB.batch(statements as unknown as D1PreparedStatement[]);
-  return statements.length;
+  return {
+    imported: statements.length,
+    detail: `matched ${relevant.length} of ${items.length} result(s)`,
+  };
 }
 
 /** Deletes API-fetched news older than 30 days. Manual entries are kept. */

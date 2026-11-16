@@ -31,6 +31,12 @@ export interface Bindings {
   GOOGLE_REVIEW_URL?: string;
   GA_MEASUREMENT_ID?: string;
   CRON_SECRET?: string;
+  /** Cloudinary — image host for AI-generated post images. */
+  CLOUDINARY_CLOUD_NAME?: string;
+  CLOUDINARY_API_KEY?: string;
+  CLOUDINARY_API_SECRET?: string;
+  CLOUDINARY_UPLOAD_PRESET?: string;
+  CLOUDINARY_FOLDER?: string;
 }
 
 const BINDING_KEYS = [
@@ -55,6 +61,11 @@ const BINDING_KEYS = [
   "GOOGLE_REVIEW_URL",
   "GA_MEASUREMENT_ID",
   "CRON_SECRET",
+  "CLOUDINARY_CLOUD_NAME",
+  "CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
+  "CLOUDINARY_UPLOAD_PRESET",
+  "CLOUDINARY_FOLDER",
 ] as const;
 
 let cachedBindings: Bindings | null = null;

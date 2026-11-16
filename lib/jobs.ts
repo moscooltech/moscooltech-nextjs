@@ -1,7 +1,7 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { generateDailyPost, generateTopicById } from "./generate";
 import { cleanupNews, fetchNews } from "./news";
-import { generateTopicById } from "./generate";
 
 /**
  * Background jobs, callable from the HTTP cron endpoint.
@@ -11,7 +11,7 @@ import { generateTopicById } from "./generate";
  * so a failed run can be retried the same day by deleting its row.
  */
 
-export const JOB_NAMES = ["fetch_news", "cleanup_news", "generate_ai"] as const;
+export const JOB_NAMES = ["fetch_news", "cleanup_news", "generate_ai", "daily_post"] as const;
 export type JobName = (typeof JOB_NAMES)[number];
 
 export function isJobName(value: string): value is JobName {
@@ -51,17 +51,25 @@ async function record(job: JobName, result: string): Promise<void> {
 
 export type JobOutcome = { ran: boolean; message: string };
 
-export async function runJob(job: JobName): Promise<JobOutcome> {
-  if (await alreadyRanToday(job)) {
+/**
+ * Runs one job. `force` bypasses the once-per-day idempotency window — used
+ * by smoke tests and manual retries (the cron route accepts ?force=1).
+ *
+ * The daily_post branch only records a `job_runs` row on SUCCESS: a failed run
+ * leaves no row, so a scheduler's automatic retry actually re-runs it the same
+ * day instead of hitting the "already ran today" wall.
+ */
+export async function runJob(job: JobName, force = false): Promise<JobOutcome> {
+  if (!force && (await alreadyRanToday(job))) {
     return { ran: false, message: `${job}: already ran today, skipped` };
   }
 
   if (job === "fetch_news") {
-    const count = await fetchNews();
-    const message = count
-      ? `fetch_news: imported ${count} article(s)`
-      : "fetch_news: nothing new (missing NEWSDATA_API_KEY or no relevant results)";
-    await record(job, message);
+    const { imported, detail } = await fetchNews();
+    const message = imported
+      ? `fetch_news: imported ${imported} article(s) — ${detail}`
+      : `fetch_news: 0 imported — ${detail}`;
+    await record(job, message.slice(0, 500));
     return { ran: true, message };
   }
 
@@ -69,6 +77,18 @@ export async function runJob(job: JobName): Promise<JobOutcome> {
     const removed = await cleanupNews();
     const message = `cleanup_news: removed ${removed} article(s)`;
     await record(job, message);
+    return { ran: true, message };
+  }
+
+  if (job === "daily_post") {
+    const result = await generateDailyPost();
+    if (!result.ok) {
+      // No record() here — see the doc comment above.
+      throw new Error(`daily_post failed: ${result.error}`);
+    }
+    const image = result.image.ok ? "image ok" : `image skipped (${result.image.reason ?? "unknown"})`;
+    const message = `daily_post: published post ${result.postId} — "${result.topic}" — ${image}`;
+    await record(job, message.slice(0, 500));
     return { ran: true, message };
   }
 

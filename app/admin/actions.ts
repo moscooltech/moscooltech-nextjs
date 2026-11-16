@@ -207,10 +207,10 @@ export async function deleteNewsAction(formData: FormData): Promise<void> {
 
 export async function fetchNewsAction(): Promise<void> {
   await requireAdmin();
-  const count = await fetchNews();
+  const { imported } = await fetchNews();
   revalidatePath("/admin/news");
   revalidatePath("/");
-  redirect(`/admin/news?fetched=${count}`);
+  redirect(`/admin/news?fetched=${imported}`);
 }
 
 export async function cleanupNewsAction(): Promise<void> {

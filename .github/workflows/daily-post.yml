@@ -1,0 +1,48 @@
+name: Daily post
+
+# Fires the site's daily_post job once a day. vinext has no scheduled()
+# handler, so Cloudflare Cron Triggers can't run it directly — a GitHub
+# Actions schedule POSTing to the cron endpoint is the scheduler instead.
+#
+# 05:05 UTC == 06:05 WAT, publishing in time for the morning reading peak.
+
+on:
+  schedule:
+    # GitHub schedules can drift by several minutes; the site's own
+    # once-per-day idempotency window absorbs any double fire.
+    - cron: "5 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: daily-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Trigger daily post
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          # The generation + image upload can take a while; give each attempt
+          # a generous window. Three tries absorb transient network blips.
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /tmp/daily.json -w "%{http_code}" -X POST \
+              "https://moscooltech.dayotunde25.workers.dev/api/cron?job=daily_post" \
+              -H "x-cron-secret: $CRON_SECRET" \
+              --max-time 420) || code=000
+            echo "attempt $attempt -> HTTP $code"
+            cat /tmp/daily.json 2>/dev/null || true
+            echo
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "daily_post did not succeed after 3 attempts" >&2
+          exit 1

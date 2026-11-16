@@ -1,5 +1,5 @@
 import { bindings } from "@/db";
-import { isJobName, jobStats, runJob } from "@/lib/jobs";
+import { isJobName, JOB_NAMES, jobStats, runJob } from "@/lib/jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,10 @@ export const dynamic = "force-dynamic";
  * UptimeRobot, a GitHub Action) at:
  *
  *   POST /api/cron?job=fetch_news     with header  x-cron-secret: <CRON_SECRET>
+ *
+ * Jobs: fetch_news, cleanup_news, generate_ai, daily_post (the auto-published
+ * SEO article, fired by .github/workflows/daily-post.yml at ~05:05 UTC).
+ * Add &force=1 to bypass the once-per-day window for any job.
  *
  * Failing closed matters: with no CRON_SECRET configured the endpoint is inert
  * rather than open to the internet.
@@ -34,20 +38,21 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const job = new URL(request.url).searchParams.get("job") ?? "";
+  const url = new URL(request.url);
+  const job = url.searchParams.get("job") ?? "";
   if (!isJobName(job)) {
-    return Response.json(
-      { error: "Unknown job", jobs: ["fetch_news", "cleanup_news", "generate_ai"] },
-      { status: 400 },
-    );
+    return Response.json({ error: "Unknown job", jobs: JOB_NAMES }, { status: 400 });
   }
 
+  // ?force=1 bypasses the once-per-day window (smoke tests, manual retries).
+  const force = url.searchParams.get("force") === "1";
+
   try {
-    const outcome = await runJob(job);
-    return Response.json({ job, ...outcome });
+    const outcome = await runJob(job, force);
+    return Response.json({ job, forced: force, ...outcome });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ job, error: message }, { status: 500 });
+    return Response.json({ job, forced: force, error: message }, { status: 500 });
   }
 }
 
