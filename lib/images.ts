@@ -17,24 +17,42 @@ export type ImageOutcome =
   | { ok: true; url: string }
   | { ok: false; reason: string };
 
-/** Builds an on-brand, safe image prompt from topic metadata. */
+/**
+ * Scene templates keyed by what the topic is about. The prompt must stay
+ * purely visual: title-like phrasing ("how to", "guide") makes schnell bake
+ * garbled lettering into the image, and negative phrasing ("no text") biases
+ * it toward text — so neither ever appears here.
+ */
+function sceneFor(topic: string, keyword?: string | null): string {
+  const hay = `${topic} ${keyword ?? ""}`.toLowerCase();
+
+  if (/\bac\b|air condition|btu|hvac|split|cooling/.test(hay)) {
+    return "a modern wall-mounted split air conditioner on a clean light-coloured wall of a tidy bright living room, its outdoor condenser unit on the wall below";
+  }
+  if (/freezer|fridge|refrigerat|chiller|cold room/.test(hay)) {
+    return "a clean stainless steel commercial freezer and a glass-front display chiller stocked with bottled drinks, inside a tidy small neighbourhood shop";
+  }
+  if (/solar|panel|inverter|battery|lithium|tubular|hybrid|off-grid|changeover|load audit/.test(hay)) {
+    return "dark rooftop solar photovoltaic panels mounted neatly on a residential roof under a clear sky, with a wall-mounted inverter and battery unit beside a doorway below";
+  }
+  if (/electr|wir|\bmcb\b|\brccb\b|breaker|ground|earth|flicker|surge|voltage|shock|switch/.test(hay)) {
+    return "a tidy modern electrical distribution board with neat rows of small circuit breakers and colour-coded wiring inside an indoor panel";
+  }
+  return "a well-organised technician's workbench with professional air-conditioning gauges and electrical tools neatly arranged";
+}
+
+/** Builds an on-brand, purely visual image prompt from topic metadata. */
 export function imagePrompt(topic: string, keyword?: string | null, category?: string | null): string {
-  const subject =
+  const scene =
     category === "portfolio"
-      ? `A technical services job scene illustrating: ${topic}.`
-      : `A clean editorial photo for a practical guide about: ${topic}.`;
+      ? `a skilled technician in a plain navy polo shirt at work, ${sceneFor(topic, keyword)}`
+      : sceneFor(topic, keyword);
 
   return [
-    subject,
-    keyword ? `Main subject: ${keyword}.` : "",
-    "Air conditioning, refrigeration, solar, inverter or electrical engineering context,",
-    "Lagos Nigeria setting, bright natural daylight, modern well-kept equipment,",
-    "professional composition, high detail.",
-    "No text, no words, no letters, no numbers, no watermark, no logo, no signature.",
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .slice(0, 900);
+    `Professional photograph of ${scene},`,
+    "natural daylight, realistic detail, sharp focus,",
+    "high-quality editorial photography for a home-services company in Lagos, Nigeria.",
+  ].join(" ");
 }
 
 /** Normalises the various shapes a Workers AI image model can return. */

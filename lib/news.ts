@@ -14,6 +14,13 @@ export const NEWS_KEYWORDS = [
   "electrical wiring",
 ];
 
+/**
+ * Query sent to NewsData.io — capped at 100 chars (their API 422s beyond that,
+ * `UnsupportedQueryLength`). A broad query is fine here because the local
+ * NEWS_KEYWORDS filter re-checks every returned title/description anyway.
+ */
+const QUERY_TERMS = ["air conditioning", "refrigeration", "solar", "inverter", "electrical"];
+
 type NewsApiItem = {
   article_id?: string;
   title?: string;
@@ -41,7 +48,7 @@ export async function fetchNews(): Promise<FetchNewsResult> {
     return { imported: 0, detail: "NEWSDATA_API_KEY is not configured on this Worker" };
   }
 
-  const query = NEWS_KEYWORDS.map((word) => `"${word}"`).join(" OR ");
+  const query = QUERY_TERMS.map((word) => `"${word}"`).join(" OR ");
   const params = new URLSearchParams({
     apikey: key,
     q: query,
@@ -105,7 +112,9 @@ export async function fetchNews(): Promise<FetchNewsResult> {
       .onConflictDoNothing(),
   );
 
-  await bindings().DB.batch(statements as unknown as D1PreparedStatement[]);
+  // Drizzle's D1 driver batch — takes query builders directly (the old raw
+  // D1PreparedStatement cast fed it malformed objects).
+  await db().batch(statements);
   return {
     imported: statements.length,
     detail: `matched ${relevant.length} of ${items.length} result(s)`,

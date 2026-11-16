@@ -213,9 +213,36 @@ Smoke test (2026-11-16): seeded test topic 3 → `generate_ai?force=1` → post
 soft-fail as designed) → all test rows deleted afterwards. Committed
 `dd4ab3b`, pushed; CI deploys on push.
 
-**Next session starter:** secrets for Cloudinary + NewsData → end-to-end
-`daily_post?force=1` → verify published post WITH image on /guides + og:image
-→ delete the Daily-post workflow's manual-run expectations.
+**Next session starter:** done — see below.
+
+**Secrets set (2026-11-16, durable `wrangler secret put`, survive deploys):**
+NEWSDATA_API_KEY, CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY,
+CLOUDINARY_API_SECRET (copies in /tmp/opencode/cf_secrets, never committed).
+Worker now carries 7 secrets: ADMIN_PASSWORD, CRON_SECRET, SESSION_SECRET +
+those four. Reminder for the user: never re-add these as dashboard
+plain-text variables — every deploy wipes variables, not secrets.
+
+**NewsData — fixed and verified.** Two real bugs behind "0 imported":
+1. Query length: 9 keyword-quoted terms (~190 chars) exceed NewsData's
+   100-char `q` limit → 422 UnsupportedQueryLength. Fixed with a 5-term
+   QUERY_TERMS query (~79 chars); the full NEWS_KEYWORDS list still does
+   precision filtering locally.
+2. `fetchNews()` fed raw Drizzle builders to the platform `DB.batch()` via a
+   wrong `as unknown as D1PreparedStatement[]` cast → D1_ERROR Malformed
+   input. Fixed: `db().batch(statements)` (Drizzle's own batch).
+Result: `fetch_news: imported 1 article(s) — matched 1 of 10 result(s)`.
+
+**Images — fixed and verified.** First attempt proved the topic-title prompt
+makes flux-1-schnell bake garbled headline text into the image ("HOW TO
+CHOOSE THE TTU…") and that "no text" negative phrasing doesn't help.
+Rewrote `imagePrompt()` as purely visual scene templates keyed off topic
+content (AC / refrigeration / solar / electrical workbench), never title
+phrasing. Second attempt: clean editorial photo (split AC, living room,
+condenser) — 200 on Cloudinary, 290 KB jpg.
+`daily_post?force=1` → post 17 "How to Choose the Right AC Size for a Room
+in Nigeria (BTU Guide)" published WITH image; verified live: og:image and
+Article JSON-LD image both point at the Cloudinary URL; /guides lists it.
+(Post 15/16 test rows were deleted; D1 holds only the URL.)
 
 ### 0.3 SEO audit fixes + brand logo — 2026-11-12
 
