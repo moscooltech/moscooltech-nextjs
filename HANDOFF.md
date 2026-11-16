@@ -151,6 +151,72 @@ by owner: **polished premium** (warm palette kept, motion added).
 - Middleware deprecation note: vinext/Next 16 prefer the `proxy.ts` name; the
   warning is benign and `middleware.ts` works on the current vinext version.
 
+### 0.4 Daily auto-poster + AI images + NewsData fix — 2026-11-16
+
+Daily SEO post pipeline (commit `dd4ab3b`, deployed + smoke-tested):
+
+- **lib/daily-topics.ts** — 30-topic SEO pool built on the content-strategy
+  methodology: all searchable, buyer-stage questions ("how to", "vs", "why"),
+  keyword per topic, rotating across AC / refrigeration / solar / electrical,
+  Nigerian phrasing, zero overlap with existing evergreen guides. Refill the
+  array when a run reports "topic pool is exhausted" (~1 post/day = ~1 month
+  per 30 topics; mark new ones so they don't repeat).
+- **lib/generate.ts** — `generateTopicById(id, { publish })`: the admin AI
+  studio still produces reviewable DRAFTS (publish defaults false); the daily
+  path auto-publishes. After generation it tries an image (soft-fail), and a
+  new `metaFromContent()` fallback fixes the old raw-slice meta description
+  ("## Introduction…" no longer leaks into the meta tag). New
+  `generateDailyPost()` picks the first pool topic that has no
+  `content_topics` row (any status = used), queues it, generates, publishes.
+- **lib/jobs.ts** — `daily_post` added to JOB_NAMES; `runJob(job, force)`
+  bypasses the once-per-day window on force; daily_post only records its
+  job_runs row on SUCCESS, so a failed day leaves no row and the scheduler's
+  retry actually re-runs it. fetch_news message now carries the detail.
+- **app/api/cron** — job list served from JOB_NAMES; `?force=1` supported on
+  POST (idempotent daily window otherwise unchanged); GET /api/cron = history.
+- **.github/workflows/daily-post.yml** — schedule `5 5 * * *` (06:05 WAT),
+  3 attempts 60 s apart, concurrency-guarded; needs repo secret CRON_SECRET
+  (set 2026-11-16 via gh CLI). Manual trigger: Actions → Daily post → Run.
+
+Images (Workers AI → Cloudinary, URL-only in D1):
+- **lib/images.ts** — `flux-1-schnell` via the AI binding (free tier,
+  ~25 Neurons/image vs 10 000/day allocation), prompt built from topic +
+  keyword with a no-text/no-logo guard, response-shape normaliser, and
+  `attachImageToPost()` which uploads then writes `posts.image_url` +
+  `imageAlt`. Any failure returns `{ ok: false, reason }` — the post still
+  publishes imageless.
+- **lib/cloudinary.ts** — signed upload (SHA-1 of sorted params + secret per
+  Cloudinary docs) with unsigned-preset fallback; `cloudinaryConfigured()`
+  gates the feature. Only the returned `secure_url` is stored in D1; CSP
+  img-src already allows https (no change needed).
+- Guide pages already wire `imageUrl` into og:image + Article JSON-LD — no
+  extra wiring was needed. **Pending: Cloudinary credentials.** Ask the user
+  for CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET (or
+  an unsigned preset name), then `wrangler secret put` each — dashboard
+  variables get wiped by every deploy. Until set, posts publish imageless
+  ("Cloudinary not configured" in the job log).
+
+NewsData fix (diagnosis + code):
+- **Cause:** NEWSDATA_API_KEY was added as a dashboard plain-text VARIABLE,
+  which every wrangler deploy wipes (mine and CI's). Secret list showed only
+  ADMIN_PASSWORD / CRON_SECRET / SESSION_SECRET — the key was gone, and the
+  job's vague message masked the 401.
+- **Fix in place:** lib/news.ts now returns `{ imported, detail }` — the job
+  log states exactly why a run imported zero (missing key / HTTP status /
+  network error / no keyword matches). Admin fetchNewsAction updated.
+- **Pending:** user must paste the key once → `wrangler secret put
+  NEWSDATA_API_KEY` → then test `POST /api/cron?job=fetch_news&force=1`.
+  Secrets survive deploys.
+
+Smoke test (2026-11-16): seeded test topic 3 → `generate_ai?force=1` → post
+14 (draft, published=0, 3 FAQs, Workers AI success 27.6 s, image_url NULL =
+soft-fail as designed) → all test rows deleted afterwards. Committed
+`dd4ab3b`, pushed; CI deploys on push.
+
+**Next session starter:** secrets for Cloudinary + NewsData → end-to-end
+`daily_post?force=1` → verify published post WITH image on /guides + og:image
+→ delete the Daily-post workflow's manual-run expectations.
+
 ### 0.3 SEO audit fixes + brand logo — 2026-11-12
 
 External SEO audit (17 screenshots in `~/work/seo check/`, dated 2026-11-11) graded
