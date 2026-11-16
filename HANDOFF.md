@@ -244,6 +244,41 @@ in Nigeria (BTU Guide)" published WITH image; verified live: og:image and
 Article JSON-LD image both point at the Cloudinary URL; /guides lists it.
 (Post 15/16 test rows were deleted; D1 holds only the URL.)
 
+### 0.5 Self-refilling topic pool — 2026-11-16
+
+The daily pool is a D1 table now (migration `0001_topic_pool.sql`, seeded with
+the 30 curated topics; `lib/daily-topics.ts` deleted). System refills itself:
+
+- **lib/topic-pool.ts** — `pickNextTopic()` (oldest queued first, stable
+  curated order), `markTopicUsed()`, `poolStats()`/`listQueuedTopics()` for
+  the admin UI, and `refillTopicPool(count=30)`: when the queue is dry the
+  Worker asks Workers AI (llama-3.3-70b, guided JSON) to plan the next batch
+  under the content-strategy rules — searchable buyer-stage topics, practical
+  information gain, four service lines balanced, Nigerian phrasing, and a
+  ban-list of everything already planned/queued/published (pool +
+  content_topics + posts titles, normalised). zod-validated; one `db.batch()`
+  insert. Returns 0 on all-repeats → treated as failure.
+- **lib/generate.ts `generateDailyPost()`** — consumes a pool row, marks it
+  used, and tops the queue back up to 30 whenever ≤ 5 remain (low-water
+  refill fails soft so a bad planning day can't fail a post day). Result
+  message reports `pool refilled +N`.
+- **Admin AI studio** — new "Daily topic pool" card: queued/used/curated/
+  AI-planned counts + the next 15 queued topics with a Prune button
+  (`deletePoolTopicAction`, only removes status='queued' rows). Curation
+  without blocking automation.
+- **Planner prompt tuning** — first AI batch had service-page listicles
+  ("Best Electrical Contractors…") and filler ("Why ACs are Important…");
+  prompt now explicitly forbids contractor listicles, importance essays and
+  advert-style topics. Watch batch #2's quality in ~a month.
+
+End-to-end test passed: pool emptied → `daily_post?force=1` → planner
+produced +30 → published post 18 "Cost of Air Conditioning Installation in
+Lagos" with image, message `pool refilled +30`. Test AI rows then deleted and
+the curated queue restored (29 queued; pool ids 1 + the post-18 topic stay
+'used' for dedupe). Committed after deploy; CI deploys migrations on push.
+
+
+
 ### 0.3 SEO audit fixes + brand logo — 2026-11-12
 
 External SEO audit (17 screenshots in `~/work/seo check/`, dated 2026-11-11) graded

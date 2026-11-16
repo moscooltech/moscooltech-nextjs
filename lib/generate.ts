@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { aiConfigured, generateDraft, modelName, providerName } from "./ai";
-import { DAILY_TOPIC_POOL } from "./daily-topics";
+import { markTopicUsed, pickNextTopic, queuedTopicCount, refillTopicPool } from "./topic-pool";
 import { attachImageToPost } from "./images";
 import { uniqueSlug } from "./slug";
 
@@ -159,35 +159,46 @@ export async function generateTopicById(
 }
 
 export type DailyPostResult =
-  | { ok: true; postId: number; topic: string; image: { ok: boolean; reason?: string } }
+  | {
+      ok: true;
+      postId: number;
+      topic: string;
+      image: { ok: boolean; reason?: string };
+      /** Set when the run had to plan a fresh batch to keep going. */
+      refilled?: number;
+    }
   | { ok: false; error: string };
 
 /**
  * The daily auto-poster: picks the next unused pool topic, queues it and
  * generates a PUBLISHED post (with image attempt) in one call.
  *
- * Topic accounting lives in `content_topics`: every pool topic that has ever
- * been queued (any status) counts as used, so nothing repeats. A topic whose
- * generation fails stays marked used — the next day's run moves on instead of
- * retrying a poisoned topic forever; the row keeps the error for manual retry
- * from the admin AI studio.
+ * The pool is the `topic_pool` table: one row per day is marked used, and
+ * when the queue runs dry the planner refills it automatically with an
+ * AI-planned batch (see lib/topic-pool.ts). As a safety net the queue is also
+ * topped up whenever it drops to five or fewer topics, so a refill day never
+ * doubles the work of the post day.
+ *
+ * A topic whose generation fails stays marked used — the next day's run moves
+ * on instead of retrying a poisoned topic forever; the row keeps the error for
+ * manual retry from the admin AI studio.
  */
 export async function generateDailyPost(): Promise<DailyPostResult> {
   if (!aiConfigured()) {
     return { ok: false, error: "AI is not configured on this Worker." };
   }
 
-  const existing = await db()
-    .select({ topic: schema.contentTopics.topic })
-    .from(schema.contentTopics);
-  const used = new Set(existing.map((row) => row.topic.trim().toLowerCase()));
-
-  const seed = DAILY_TOPIC_POOL.find((candidate) => !used.has(candidate.topic.toLowerCase()));
+  let seed = await pickNextTopic();
+  let refilled: number | undefined;
   if (!seed) {
-    return {
-      ok: false,
-      error: "Daily topic pool is exhausted — add new topics to lib/daily-topics.ts.",
-    };
+    refilled = await refillTopicPool(30);
+    seed = refilled ? await pickNextTopic() : null;
+    if (!seed) {
+      return {
+        ok: false,
+        error: "Topic pool is empty and the planner produced no new topics.",
+      };
+    }
   }
 
   const inserted = await db()
@@ -195,17 +206,36 @@ export async function generateDailyPost(): Promise<DailyPostResult> {
     .values({
       topic: seed.topic,
       keyword: seed.keyword,
-      category: seed.category ?? "guides",
-      tone: seed.tone ?? "practical",
-      targetWords: seed.targetWords ?? 1200,
-      faqCount: seed.faqCount ?? 4,
+      category: seed.category,
+      tone: seed.tone,
+      targetWords: seed.targetWords,
+      faqCount: seed.faqCount,
       status: "queued",
     })
     .returning({ id: schema.contentTopics.id });
 
   const topicId = inserted[0]!.id;
+  await markTopicUsed(seed.id);
+
   const result = await generateTopicById(topicId, { publish: true });
   if (!result.ok) return { ok: false, error: result.error };
 
-  return { ok: true, postId: result.postId, topic: seed.topic, image: result.image ?? { ok: false, reason: "not attempted" } };
+  // Low-water top-up: keep at least a week of topics queued. Failures here
+  // must not fail today's published post — the next run refills when empty.
+  let toppedUp = 0;
+  try {
+    const remaining = await queuedTopicCount();
+    if (remaining <= 5) toppedUp = await refillTopicPool(30);
+    if (toppedUp) refilled = (refilled ?? 0) + toppedUp;
+  } catch {
+    /* the pool refills on its next empty run regardless */
+  }
+
+  return {
+    ok: true,
+    postId: result.postId,
+    topic: seed.topic,
+    image: result.image ?? { ok: false, reason: "not attempted" },
+    ...(refilled ? { refilled } : {}),
+  };
 }

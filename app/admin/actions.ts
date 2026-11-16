@@ -289,6 +289,19 @@ export async function requeueTopicAction(formData: FormData): Promise<void> {
   redirect("/admin/ai");
 }
 
+/** Prunes an UNUSED topic-pool row (planned but never consumed). */
+export async function deletePoolTopicAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (Number.isInteger(id)) {
+    await db()
+      .delete(schema.topicPool)
+      .where(and(eq(schema.topicPool.id, id), eq(schema.topicPool.status, "queued")));
+  }
+  revalidatePath("/admin/ai");
+  redirect("/admin/ai");
+}
+
 /* Kept for the dashboard's "did anything arrive" check. */
 export async function staleTopicCount(): Promise<number> {
   const rows = await db()

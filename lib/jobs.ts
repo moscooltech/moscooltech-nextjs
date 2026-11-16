@@ -87,7 +87,8 @@ export async function runJob(job: JobName, force = false): Promise<JobOutcome> {
       throw new Error(`daily_post failed: ${result.error}`);
     }
     const image = result.image.ok ? "image ok" : `image skipped (${result.image.reason ?? "unknown"})`;
-    const message = `daily_post: published post ${result.postId} — "${result.topic}" — ${image}`;
+    const refill = result.refilled ? `; pool refilled +${result.refilled}` : "";
+    const message = `daily_post: published post ${result.postId} — "${result.topic}" — ${image}${refill}`;
     await record(job, message.slice(0, 500));
     return { ran: true, message };
   }

@@ -3,11 +3,13 @@ import { desc } from "drizzle-orm";
 import { db, schema } from "@/db";
 import {
   createTopicAction,
+  deletePoolTopicAction,
   deleteTopicAction,
   generateTopicAction,
   requeueTopicAction,
 } from "@/app/admin/actions";
 import { aiConfigured, modelName, providerName } from "@/lib/ai";
+import { listQueuedTopics, poolStats } from "@/lib/topic-pool";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +29,11 @@ export default async function AiStudioPage({
 }) {
   const { error, generated } = await searchParams;
 
-  const [topics, generations] = await Promise.all([
+  const [topics, generations, pool, poolQueued] = await Promise.all([
     db().select().from(schema.contentTopics).orderBy(desc(schema.contentTopics.createdAt)).limit(50),
     db().select().from(schema.aiGenerations).orderBy(desc(schema.aiGenerations.createdAt)).limit(15),
+    poolStats(),
+    listQueuedTopics(15),
   ]);
 
   const configured = aiConfigured();
@@ -197,6 +201,42 @@ export default async function AiStudioPage({
                 Add to queue
               </button>
             </form>
+          </section>
+
+          <section className="card p-6">
+            <h2 className="font-display text-lg font-semibold">Daily topic pool</h2>
+            <p className="mt-1 text-xs text-ink-muted">
+              {pool.queued} queued · {pool.used} used · {pool.curated} curated ·{" "}
+              {pool.aiPlanned} AI-planned. The daily poster takes the oldest queued topic;
+              when the queue runs dry it plans a fresh batch automatically, and it tops up
+              early at {`≤`}&nbsp;5. Prune anything you don&rsquo;t want before it&rsquo;s used.
+            </p>
+
+            {pool.queued === 0 ? (
+              <p className="mt-3 text-sm text-ink-muted">
+                Queue is empty — the next daily run will plan a new batch by itself.
+              </p>
+            ) : (
+              <ul className="mt-3 flex flex-col divide-y divide-line text-sm">
+                {poolQueued.map((item) => (
+                  <li key={item.id} className="flex items-start justify-between gap-3 py-2">
+                    <span className="min-w-0">
+                      <span className="block truncate">{item.topic}</span>
+                      <span className="text-xs text-ink-muted">
+                        {item.source === "ai" ? "AI-planned" : "curated"}
+                        {item.keyword ? ` · ${item.keyword}` : ""}
+                      </span>
+                    </span>
+                    <form action={deletePoolTopicAction} className="shrink-0">
+                      <input type="hidden" name="id" value={item.id} />
+                      <button type="submit" className="text-xs text-ink-muted hover:text-accent">
+                        Prune
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="card p-6">

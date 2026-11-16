@@ -133,6 +133,25 @@ export const contentTopics = sqliteTable(
   (t) => [index("content_topics_status_idx").on(t.status)],
 );
 
+export const topicPool = sqliteTable(
+  "topic_pool",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    topic: text("topic").notNull(),
+    keyword: text("keyword"),
+    category: text("category").default("guides").notNull(),
+    tone: text("tone").default("practical").notNull(),
+    targetWords: integer("target_words").default(1200).notNull(),
+    faqCount: integer("faq_count").default(4).notNull(),
+    /** queued = not yet consumed; used = already turned into a content_topic. */
+    status: text("status").default("queued").notNull(),
+    /** curated = hand-written seed batch; ai = planned by the model refill. */
+    source: text("source").default("curated").notNull(),
+    createdAt: text("created_at").default(now).notNull(),
+  },
+  (t) => [index("topic_pool_status_idx").on(t.status)],
+);
+
 export const aiGenerations = sqliteTable("ai_generations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   topic: text("topic").notNull(),
